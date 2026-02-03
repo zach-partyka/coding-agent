@@ -171,17 +171,6 @@ Press one key to run sprints.
 export RALPH_WT_PROFILE="YourProfileName"
 ```
 
-### Upgrading from ~/Documents/AI/
-
-Old location: `~/Documents/AI/ralph-continuous.sh` (still works, no updates)
-New location: `~/Documents/ralph/ralph-continuous.sh` (auto-installed)
-
-**Migrate:**
-```bash
-rm ~/Documents/AI/ralph-continuous.sh
-rmdir ~/Documents/AI 2>/dev/null
-```
-
 ### Project Files
 
 ```
