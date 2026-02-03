@@ -1,0 +1,40 @@
+# Sprint Plan
+
+## Active Sprint
+
+### Sprint Goals
+[What are you trying to accomplish this sprint? 1-3 high-level goals]
+
+### Tasks
+
+#### Backlog (not started)
+- [ ] [Task description - be specific about what done looks like]
+- [ ] [Task description]
+
+#### In Progress
+- [ ] [Task currently being worked on]
+
+#### Completed
+- [x] [Completed task with brief note if helpful]
+
+#### Blocked
+- [ ] **BLOCKED:** [Task description] - [Blocker description and what's needed to unblock]
+
+## Backlog (Future Sprints)
+
+### High Priority
+- [ ] [Task that should be next sprint]
+
+### Medium Priority
+- [ ] [Task for future consideration]
+
+### Low Priority / Ideas
+- [ ] [Nice-to-have or exploratory task]
+
+## Notes
+
+[Any context, decisions, or reminders for this sprint]
+
+## Sprint History
+
+See `sprints/` directory for completed sprint archives.

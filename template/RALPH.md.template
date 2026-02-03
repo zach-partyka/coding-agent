@@ -1,0 +1,88 @@
+# Ralph Build Instructions
+
+This file tells Ralph how to work with your project. Update it as you learn patterns and discover quirks.
+
+## Quick Reference
+
+**Build & Test:**
+```bash
+# Local validation (before commit)
+[INSERT YOUR COMMAND - e.g., npm run check, python -m pytest]
+
+# Install dependencies
+[INSERT YOUR COMMAND - e.g., npm install, pip install -r requirements.txt]
+
+# Run tests against staging
+[INSERT YOUR COMMAND - e.g., npm test, python -m pytest tests/integration/]
+```
+
+**Deployment:**
+- Pushing to `main` auto-deploys to staging
+- Wait time: ~5 minutes for deployment
+- Health check: `[STAGING_URL]/health`
+
+## Project Structure
+
+```
+[INSERT YOUR PROJECT STRUCTURE]
+Example:
+src/
+  api/          # API routes and handlers
+  models/       # Database models
+  services/     # Business logic
+  utils/        # Shared utilities
+tests/
+  unit/         # Unit tests
+  integration/  # Integration tests (run against staging)
+```
+
+## Common Patterns
+
+### [Pattern Name - e.g., "Adding a New API Endpoint"]
+[Describe the pattern]
+
+Example:
+1. Create route in `src/api/routes.py`
+2. Add service logic in `src/services/`
+3. Add tests in `tests/integration/test_api.py`
+4. Update OpenAPI schema if applicable
+
+### [Pattern Name - e.g., "Database Migrations"]
+[Describe the pattern]
+
+## Project-Specific Quirks
+
+- [Add quirks as you discover them]
+- Example: "Health check endpoint returns 200 but with custom body format"
+- Example: "Tests require DATABASE_URL environment variable"
+
+## Dependencies
+
+**Production:**
+- [List key dependencies]
+
+**Development:**
+- [List key dev dependencies]
+
+## Environment Variables
+
+Required for local development:
+- `[VAR_NAME]`: [Description]
+
+Required for testing:
+- `[VAR_NAME]`: [Description]
+
+## Learned Lessons
+
+[Add lessons as Ralph makes mistakes or you discover better patterns]
+
+### [Date] - [Lesson Title]
+**What happened:** [Brief description]
+**Solution:** [What works]
+**Pattern:** [General rule to follow]
+
+Example:
+### 2026-01-15 - Database Connection Pooling
+**What happened:** Tests were failing intermittently with connection timeouts
+**Solution:** Set max pool size to 5 for test environment
+**Pattern:** Always configure connection pools explicitly in test setup
