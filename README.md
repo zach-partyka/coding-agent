@@ -204,10 +204,10 @@ your-project/
 - One feature/fix per task
 - Clear success criteria
 
-**Update RALPH.md:**
-- Document mistakes
-- Note project quirks
-- Keep current
+**Run retrospectives:**
+- `/ralph-archive` reviews sprint and updates RALPH.md with learnings
+- Documents mistakes, quirks, and patterns discovered
+- Keeps build instructions current
 
 ---
 
