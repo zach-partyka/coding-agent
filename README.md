@@ -19,7 +19,9 @@ AI-powered sprint execution. Define what to build, Ralph implements and deploys 
   - With: Parallel execution in new tabs (faster, better visibility)
 
 **Mac:**
-- Terminal.app (built-in) or iTerm2
+- Terminal.app (built-in) or iTerm2 (recommended)
+  - Terminal.app: Opens new windows per task (clutters screen)
+  - iTerm2: Opens new tabs in same window (cleaner)
 
 **Everyone:**
 - Claude Code CLI (`claude --version` works)
