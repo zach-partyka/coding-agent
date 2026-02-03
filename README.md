@@ -1,272 +1,256 @@
 # Ralph Starter Kit
 
-AI-powered sprint execution for your development projects. Define what to build, Ralph implements it autonomously, you review the results.
+**What:** AI-powered sprint execution that automates your entire development workflow.
 
-**Proven Results:** 6 sprints completed at $7.50 total cost vs. $1,750 engineer baseline.
+**Impact:** Define what to build, Ralph implements it autonomously, you review deployed results.
+
+**Without Ralph:**
+```
+Write specs → Write code → Write tests → Debug → Commit → Push →
+Wait for deploy → Test staging → Fix bugs → Repeat
+```
+
+**With Ralph:**
+```
+Write specs → claude "/ralph-continuous" → Review deployed results
+```
+
+**Proven savings:** 6 sprints at $7.50 total vs $1,750 engineer baseline (99%+ cost reduction).
 
 ---
 
-## Before You Begin
+## Prerequisites
 
-Make sure you have these installed:
+**Windows:**
+- Git Bash ([download](https://git-scm.com/download/win)) - **required**
+- Windows Terminal ([download](https://aka.ms/terminal)) - **optional, recommended**
+  - Without it: Tasks run sequentially in current window
+  - With it: Each task opens in new tab (faster, better visibility)
 
-**Windows users:**
-- [ ] **Git Bash** ([Git for Windows](https://git-scm.com/download/win))
-- [ ] **Windows Terminal** ([Microsoft Store](https://aka.ms/terminal) or built-in on Windows 11)
-  - **Configure Git Bash profile:**
-    1. Open Windows Terminal → Settings (Ctrl+,)
-    2. Click "+ Add a new profile" → "New empty profile"
-    3. **Name:** `Git Bash`
-    4. **Command line:** `C:\Program Files\Git\bin\bash.exe`
-    5. **Starting directory:** `%USERPROFILE%`
-    6. Under **Advanced** → **Close on exit:** Select `Never` (or `Only on success`)
-    7. Click **Save**
-
-  **Custom profile name?** Set environment variable:
-  ```bash
-  export RALPH_WT_PROFILE="YourProfileName"
-  ```
-
-**Mac users:**
-- [ ] iTerm2 (recommended) or Terminal.app (Terminal.app is built-in)
-  - **Zillow users:** Install iTerm2 via Jamf Self Service (search "iTerm2" in the Self Service app on your Mac)
+**Mac:**
+- Terminal.app (built-in) or iTerm2 (recommended)
 
 **Everyone:**
-- [ ] Claude Code CLI installed (`claude --version` should work)
-  - **Zillow users:** Install via [ServiceNow](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9)
-- [ ] GitLab access configured (HTTPS with authentication token)
-- [ ] Ralph skills installed in Claude Code
-  - Verify: Type `claude` then `/ralph` - should autocomplete
-  - If missing: Contact your team lead for skill installation
+- Claude Code CLI (`claude --version` should work)
+- Git repository with HTTPS remote
+- Ralph skills installed (type `claude` then `/ralph` to verify)
 
-**Need a test project?** Use the examples in this repo (see Step 2 below).
+> **Windows users:** Run all commands in Git Bash, not PowerShell or CMD.
 
 ---
 
 ## Quick Start
 
-> **Windows users:** Use **Git Bash** for all commands below (not PowerShell or CMD)
-
-### 1. Clone the Starter Kit
+### 1. Clone this repo
 
 ```bash
 git clone https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit.git
 cd ralph-starter-kit
 ```
 
-### 2. Set Up Your Project
+### 2. Run setup in your project
 
-**Important:** Run this in an existing project with code (not an empty directory).
-
-**Testing first?** Try Ralph on an example project:
-```bash
-cd examples/nodejs-typescript
-../../scripts/setup.sh
-```
-
-**Ready for your real project?** Run setup in your project directory:
 ```bash
 cd /path/to/your/project
 /path/to/ralph-starter-kit/scripts/setup.sh
 ```
 
-**Custom installation path?** Use the `--path` flag:
-```bash
-/path/to/ralph-starter-kit/scripts/setup.sh --path ~/my-custom-location
-```
+Setup will detect your project type and create:
+- `ralph.config.sh` - Git remote, staging URL, test commands
+- `RALPH.md` - Build instructions for Ralph
+- `sprint_plan.md` - Sprint task tracker
+- `specs/` and `stdlib/` - What to build and how to build it
 
-The setup script will:
-- ✓ Check prerequisites (Git Bash, Claude CLI)
-- ✓ Detect your project type (Node.js, Python, Go, etc.)
-- ✓ Create project configuration (`ralph.config.sh`)
-- ✓ Create build instructions (`RALPH.md`)
-- ✓ Create sprint tracker (`sprint_plan.md`)
-- ✓ Set up specs/ and stdlib/ directories
-- ✓ Install ralph-continuous.sh to `~/Documents/ralph/` (first time only)
-
-### 3. Run Your First Sprint
+### 3. Run your first sprint
 
 ```bash
-cd /path/to/your/project
-
-# Plan your sprint
+# Plan the sprint (answers questions, creates tasks)
 claude "/ralph-plan"
 
-# Execute it
+# Execute the sprint (implements all tasks)
 claude "/ralph-continuous"
 ```
 
-Done! Ralph will implement, test, commit, and deploy each task automatically.
-
----
-
-## Upgrading from Previous Installation
-
-**If you previously installed ralph-continuous.sh to `~/Documents/AI/`:**
-
-The new standard location is `~/Documents/ralph/ralph-continuous.sh`.
-
-When you run `setup.sh` in a new project, it will install to the new location. Your old installation will continue to work but won't receive updates.
-
-**To migrate to the new location:**
-
-```bash
-# Remove old installation
-rm ~/Documents/AI/ralph-continuous.sh
-
-# Optionally remove old directory if empty
-rmdir ~/Documents/AI 2>/dev/null
-
-# New installations will go to ~/Documents/ralph/
-```
-
-**Or keep using your old location:**
-- You'll need to manually copy updates from `ralph-starter-kit/scripts/ralph-continuous.sh`
-- Won't get automatic updates when running setup.sh in new projects
+Done. Ralph will implement, test, commit, push, deploy, and validate each task automatically.
 
 ---
 
 ## How to Use Ralph
 
-### Planning a Sprint
+**Plan a sprint:**
 ```bash
 claude "/ralph-plan"
 ```
-Answers questions about what you want to build, creates sprint_plan.md with tasks.
+Answers questions about what to build, generates `sprint_plan.md`.
 
-### Running a Sprint
-
-**Option 1: Command Line**
+**Execute a sprint:**
 ```bash
 claude "/ralph-continuous"
 ```
-Runs all tasks automatically. Each task opens in a new terminal tab so you can watch progress.
+Implements all tasks. Opens each task in a new terminal tab so you can watch progress.
 
-**Option 2: Keyboard Shortcut (Optional)**
-```
-Press Shift+Cmd+R (macOS only - see Advanced section below)
-```
-Same as command line, but with one keypress.
-
-**Option 3: One Task at a Time**
+**Run one task:**
 ```bash
 claude "/ralph"
 ```
-Implements one task, then stops. Good for learning or cautious iteration.
+Implements one task, then stops. Good for learning or testing.
 
-### What Ralph Does
-
-For each task:
+**What happens per task:**
 1. Creates git branch
-2. Implements the feature (follows specs/ and stdlib/ patterns)
-3. Runs tests
+2. Implements feature (follows `specs/` and `stdlib/` patterns)
+3. Runs local tests
 4. Commits and pushes
 5. Waits for staging deployment
-6. Runs integration tests
-7. Updates sprint_plan.md
-
----
-
-## Project Files
-
-After setup, your project will have:
-
-```
-your-project/
-├── ralph.config.sh      # Your project's configuration
-├── RALPH.md             # Build instructions for Ralph
-├── sprint_plan.md       # Current sprint tasks
-├── specs/               # What to build (requirements)
-├── stdlib/              # How to build (code patterns)
-└── sprints/             # Completed sprint history
-```
-
-### ralph.config.sh
-Tells Ralph about your project:
-- Git repository URL
-- Staging environment URL
-- How to run tests
-- Deployment wait times
-
-### RALPH.md
-Instructions for building and testing your project. Update this when you discover new patterns or quirks.
-
-### sprint_plan.md
-Your current sprint tasks. Ralph reads this to know what to build next.
-
-### specs/
-Feature specifications. Describe WHAT to build:
-- Requirements
-- API contracts
-- Edge cases
-- Success criteria
-
-### stdlib/
-Technical patterns. Describe HOW to build:
-- Code examples
-- Testing patterns
-- Project-specific conventions
+6. Runs integration tests against staging
+7. Updates `sprint_plan.md`
 
 ---
 
 ## Examples
 
-Complete examples are in the `examples/` directory:
+**Try Ralph on an example project first:**
 
-### Python/FastAPI
-Full configuration for Python projects using FastAPI (Zillow standard).
+```bash
+cd ralph-starter-kit/examples/nodejs-typescript
+../../scripts/setup.sh
+claude "/ralph-plan"
+claude "/ralph-continuous"
+```
 
-**See:**
-- `examples/python-fastapi/ralph.config.sh` - Configuration
-- `examples/python-fastapi/RALPH.md` - Build instructions
-- `examples/python-fastapi/specs/` - Example API specs
-- `examples/python-fastapi/stdlib/` - FastAPI patterns
+**Example projects included:**
+- `examples/nodejs-typescript/` - Express + Playwright (Marketing Copilot reference)
+- `examples/python-fastapi/` - FastAPI + pytest (Zillow standard)
 
-### Node.js/TypeScript
-Reference from Marketing Copilot (6 sprints, $7.50 cost).
-
-**See:**
-- `examples/nodejs-typescript/ralph.config.sh` - Configuration
-- `examples/nodejs-typescript/RALPH.md` - Build instructions
-- `examples/nodejs-typescript/specs/` - Example API specs
-- `examples/nodejs-typescript/stdlib/` - Express + Playwright patterns
+Each includes:
+- `ralph.config.sh` - Configured for example project
+- `RALPH.md` - Build instructions
+- `specs/` - Example feature specs
+- `stdlib/` - Code patterns
 
 ---
 
 ## Troubleshooting
 
-### Hotkey doesn't work
-- Check iTerm2 Preferences → Keys → Key Bindings for conflicts
-- Try a different shortcut (Shift+Cmd+B, Ctrl+Cmd+R)
-- Make sure you typed `claude "/ralph-continuous"\n` exactly (include `\n`)
+**Setup fails with "Claude CLI not found":**
+- Install Claude Code: `claude --version` should work
+- Zillow users: Install via [ServiceNow](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9)
 
-### No iTerm2 tabs open
-- Check System Settings → Privacy & Security → Automation
-- Make sure iTerm2 can control System Events
+**"/ralph command not found":**
+- Skills not installed. Contact your team lead.
 
-### Tests fail
-- Run the test command manually to see the error
-- For Python: make sure virtual environment is activated (`source venv/bin/activate`)
-- For Node.js: make sure dependencies are installed (`npm install`)
+**Tests fail:**
+- Run test command manually to see error
+- Python: activate venv first (`source venv/bin/activate`)
+- Node.js: install dependencies (`npm install`)
 
-### Git push rejected
-- Make sure git remote uses HTTPS: `git remote -v`
-- If it shows `git@gitlab...`, fix it:
+**Git push rejected:**
+- Verify HTTPS remote: `git remote -v`
+- If SSH (`git@...`), switch to HTTPS:
   ```bash
   git remote set-url origin https://gitlab.zgtools.net/your-team/your-repo.git
   ```
 
-### Need more help
-See `EXAMPLES.md` for detailed troubleshooting and setup guides.
+**Windows Terminal doesn't spawn tabs:**
+- See Advanced section below for Windows Terminal profile setup
+
+**More help:** See `EXAMPLES.md` for detailed guides.
 
 ---
 
-## Tips
+## Advanced
+
+### Custom Installation Path
+
+Install `ralph-continuous.sh` to a custom location:
+
+```bash
+/path/to/ralph-starter-kit/scripts/setup.sh --path ~/custom-location
+```
+
+Default: `~/Documents/ralph/`
+
+### iTerm2 Hotkey (macOS)
+
+Run sprints with one keypress instead of typing commands.
+
+**Setup:**
+1. iTerm2 → Preferences (Cmd+,) → Keys → Key Bindings → Click "+"
+2. Configure:
+   - **Keyboard Shortcut:** Press `Shift+Cmd+R`
+   - **Action:** "Send Text with vim Special Chars"
+   - **Text:** `claude "/ralph-continuous"\n` (include `\n`)
+3. Click OK
+
+**First use:** macOS will prompt for Accessibility permission. Grant it in System Settings → Privacy & Security.
+
+**Usage:** Press `Shift+Cmd+R` from your project directory to start a sprint.
+
+**Other useful hotkeys:**
+- `Shift+Cmd+P` → `claude "/ralph-plan"\n` (planning)
+- `Shift+Cmd+T` → `claude "/ralph"\n` (single task)
+
+### Windows Terminal Setup
+
+**If terminal tabs don't spawn on Windows:**
+
+1. Open Windows Terminal → Settings (Ctrl+,)
+2. Click "+ Add a new profile" → "New empty profile"
+3. Configure:
+   - **Name:** `Git Bash`
+   - **Command line:** `C:\Program Files\Git\bin\bash.exe`
+   - **Starting directory:** `%USERPROFILE%`
+   - **Advanced → Close on exit:** `Never` (or `Only on success`)
+4. Save
+
+**Custom profile name?** Set environment variable:
+```bash
+export RALPH_WT_PROFILE="YourProfileName"
+```
+
+### Upgrading from ~/Documents/AI/
+
+**If you previously installed to `~/Documents/AI/`:**
+
+New location is `~/Documents/ralph/`. Old installation still works but won't get updates.
+
+**To migrate:**
+```bash
+rm ~/Documents/AI/ralph-continuous.sh
+rmdir ~/Documents/AI 2>/dev/null  # if empty
+```
+
+New installs will use `~/Documents/ralph/` automatically.
+
+### Project Files Reference
+
+After setup, your project has:
+
+```
+your-project/
+├── ralph.config.sh      # Git remote, staging URL, test commands
+├── RALPH.md             # Build instructions for Ralph
+├── sprint_plan.md       # Current sprint tasks
+├── specs/               # Feature specifications (what to build)
+├── stdlib/              # Code patterns (how to build)
+└── sprints/             # Completed sprint archives
+```
+
+**ralph.config.sh** - Configuration (git remote, staging URL, test commands, deploy wait times)
+
+**RALPH.md** - Build instructions. Update when you discover new patterns or project quirks.
+
+**sprint_plan.md** - Task list Ralph reads. Created by `/ralph-plan`, updated by `/ralph`.
+
+**specs/** - Feature requirements (API contracts, edge cases, success criteria)
+
+**stdlib/** - Technical patterns (code examples, testing patterns, conventions)
+
+### Tips for Better Results
 
 **Write clear specs:**
-- Describe what should happen when things go wrong
+- Describe edge cases and error handling
 - Include validation commands
-- Specify which files to change
+- Specify which files to modify
 
 **Keep tasks small:**
 - 15-30 minutes per task
@@ -277,46 +261,6 @@ See `EXAMPLES.md` for detailed troubleshooting and setup guides.
 - Add "Learned Lessons" when Ralph makes mistakes
 - Document project quirks
 - Keep build instructions current
-
----
-
-## Advanced: iTerm2 Hotkey (Optional)
-
-**macOS users:** For faster workflow, set up a hotkey to run Ralph with one keypress instead of typing commands.
-
-### Set Up Hotkey
-
-1. Open iTerm2 → Preferences (Cmd+,)
-2. Navigate to: **Keys → Key Bindings**
-3. Click the **"+"** button
-4. Configure:
-   - **Keyboard Shortcut:** Press `Shift+Cmd+R`
-   - **Action:** Select "Send Text with vim Special Chars"
-   - **Text:** `claude "/ralph-continuous"\n`
-
-   ⚠️ Include the `\n` at the end - this sends the Enter key
-
-5. Click **OK**
-
-### First Time Setup: macOS Permissions
-
-macOS will prompt you to allow iTerm2 to control System Events the first time you use the hotkey.
-
-1. Click "Open System Settings" when prompted
-2. Enable iTerm2 under: **Privacy & Security → Accessibility**
-3. Try the hotkey again
-
-### Usage
-
-Once configured, press `Shift+Cmd+R` from your project directory to start a sprint.
-
-**Alternative hotkeys you might set up:**
-- `Shift+Cmd+P` → `claude "/ralph-plan"\n` (sprint planning)
-- `Shift+Cmd+T` → `claude "/ralph"\n` (single task)
-
-**Troubleshooting:**
-- If hotkey doesn't work, check for conflicts in System Preferences → Keyboard → Shortcuts
-- Try a different key combination (e.g., `Shift+Cmd+B`)
 
 ---
 
