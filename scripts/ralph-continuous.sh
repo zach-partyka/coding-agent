@@ -12,6 +12,9 @@
 
 set -e
 
+# Configuration
+RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
+
 # Check for --inline flag (forces inline mode, no external terminal spawning)
 FORCE_INLINE=false
 for arg in "$@"; do
@@ -48,7 +51,7 @@ if [ -z "$PROJECT_ARG" ]; then
   while IFS= read -r sprint_file; do
     project_dir=$(dirname "$sprint_file")
     RALPH_PROJECTS+=("$project_dir")
-  done < <(find /Users/zachpa/Documents -name "sprint_plan.md" -type f 2>/dev/null | grep -v "/sprints/" | head -n 10)
+  done < <(find "$HOME/Documents" -name "sprint_plan.md" -type f 2>/dev/null | grep -v "/sprints/" | head -n 10)
 
   if [ ${#RALPH_PROJECTS[@]} -gt 0 ]; then
     echo "Found Ralph projects:"
@@ -151,6 +154,8 @@ detect_terminal() {
     echo "terminal"
   elif [ "$TERM_PROGRAM" = "vscode" ]; then
     echo "vscode"
+  elif command -v wt.exe &> /dev/null && [ -n "$WT_SESSION" ]; then
+    echo "windows-terminal"
   else
     # Default to Terminal.app on macOS
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -220,6 +225,32 @@ tell application "iTerm"
   end if
 end tell
 EOF
+}
+
+# Spawn Claude in a new Windows Terminal tab
+spawn_in_windows_terminal() {
+  local task_num=$1
+  local dir_name=$(basename "$PROJECT_DIR")
+
+  local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
+
+📁 $dir_name
+
+Implement ONE task from sprint_plan.md, then signal completion.
+
+When done: touch $MARKER_DIR/task-done
+If sprint complete: touch $MARKER_DIR/sprint-complete'"
+
+  # Spawn tab - wt.exe will error if profile doesn't exist
+  if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$cmd" 2>/dev/null; then
+    return 0
+  else
+    echo "⚠️  Failed to spawn Windows Terminal tab"
+    echo "   Profile '$RALPH_WT_PROFILE' not found in Windows Terminal"
+    echo "   Set RALPH_WT_PROFILE env var if using different profile name"
+    echo "   Falling back to inline mode..."
+    return 1
+  fi
 }
 
 # Spawn with forced PTY (for VS Code or other non-native terminals)
@@ -399,10 +430,23 @@ while true; do
       spawn_in_terminal $TASK_COUNT
       wait_for_completion $TASK_COUNT
       ;;
+    "windows-terminal")
+      if spawn_in_windows_terminal $TASK_COUNT; then
+        wait_for_completion $TASK_COUNT
+      else
+        # Fallback to inline if tab spawning failed
+        echo "ℹ️  Running in inline mode - tasks will execute sequentially in this window."
+        spawn_inline $TASK_COUNT
+      fi
+      ;;
     "pty")
       spawn_with_pty $TASK_COUNT
       ;;
     *)
+      echo "ℹ️  Terminal tab spawning not available in this environment"
+      echo "   (Supported: iTerm2, Terminal.app, VS Code, Windows Terminal)"
+      echo "   Running in inline mode - tasks will execute sequentially in this window."
+      echo ""
       spawn_inline $TASK_COUNT
       ;;
   esac

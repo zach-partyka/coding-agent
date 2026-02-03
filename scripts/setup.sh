@@ -3,6 +3,76 @@
 
 set -e
 
+# Detect platform and check prerequisites
+detect_platform() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    PLATFORM="macos"
+  elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "mingw"* ]]; then
+    PLATFORM="windows"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    PLATFORM="linux"
+  else
+    PLATFORM="unknown"
+  fi
+}
+
+check_prerequisites() {
+  # Check for bash (should always exist if we're running, but validate)
+  if ! command -v bash &> /dev/null; then
+    echo "❌ Bash not found"
+    exit 1
+  fi
+
+  # Windows-specific checks
+  if [[ "$PLATFORM" == "windows" ]]; then
+    if ! command -v wt.exe &> /dev/null; then
+      echo "⚠️  Windows Terminal not found (optional but recommended)"
+      echo "   Install from: https://aka.ms/terminal"
+      echo "   Without it, Ralph will run in inline mode (slower but functional)"
+      echo ""
+      read -p "Continue anyway? (y/N): " -n 1 -r
+      echo
+      [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+    fi
+  fi
+
+  # Check for Claude CLI (all platforms)
+  if ! command -v claude &> /dev/null; then
+    echo "❌ Claude CLI not found"
+    echo "   Make sure 'claude' command is available in your PATH"
+    exit 1
+  fi
+}
+
+# Run checks
+detect_platform
+check_prerequisites
+
+# Parse arguments
+CUSTOM_INSTALL_PATH=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --path)
+      CUSTOM_INSTALL_PATH="$2"
+      shift 2
+      ;;
+    --help)
+      echo "Usage: setup.sh [--path /custom/path]"
+      echo ""
+      echo "Options:"
+      echo "  --path DIR    Install ralph-continuous.sh to custom directory"
+      echo "                (default: ~/Documents/ralph)"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Run 'setup.sh --help' for usage"
+      exit 1
+      ;;
+  esac
+done
+
 echo "=== Ralph Starter Kit Setup ==="
 echo ""
 
@@ -210,6 +280,25 @@ cp "$STARTER_KIT_DIR/template/ralph.sh" "$PROJECT_DIR/ralph.sh"
 chmod +x "$PROJECT_DIR/ralph.sh"
 echo "✓ Created ralph.sh"
 
+# Install ralph-continuous.sh to global location (one-time)
+if [ -n "$CUSTOM_INSTALL_PATH" ]; then
+  GLOBAL_RALPH_DIR="$CUSTOM_INSTALL_PATH"
+else
+  GLOBAL_RALPH_DIR="$HOME/Documents/ralph"
+fi
+
+GLOBAL_RALPH_SCRIPT="$GLOBAL_RALPH_DIR/ralph-continuous.sh"
+
+if [ ! -f "$GLOBAL_RALPH_SCRIPT" ]; then
+  echo "Installing ralph-continuous.sh globally..."
+  mkdir -p "$GLOBAL_RALPH_DIR"
+  cp "$STARTER_KIT_DIR/scripts/ralph-continuous.sh" "$GLOBAL_RALPH_SCRIPT"
+  chmod +x "$GLOBAL_RALPH_SCRIPT"
+  echo "✓ Installed to $GLOBAL_RALPH_SCRIPT"
+else
+  echo "✓ ralph-continuous.sh already installed at $GLOBAL_RALPH_SCRIPT"
+fi
+
 # Create sprint_plan.md if it doesn't exist
 if [ ! -f "$PROJECT_DIR/sprint_plan.md" ]; then
   echo "Creating sprint_plan.md..."
@@ -272,6 +361,7 @@ echo "  ✓ sprint_plan.md (sprint tracker)"
 echo "  ✓ specs/ (feature specifications)"
 echo "  ✓ stdlib/ (technical patterns)"
 echo "  ✓ sprints/ (archive directory)"
+echo "  ✓ ralph-continuous.sh available at $GLOBAL_RALPH_DIR/"
 echo ""
 
 # iTerm2 hotkey setup (optional but recommended)
