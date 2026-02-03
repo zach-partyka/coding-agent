@@ -342,7 +342,112 @@ Example prioritization:
 
 **⚠️ IMPORTANT:** The old sprint_plan.md is already archived in step 7. Overwriting is safe.
 
-### 11. Report Completion
+### 11. Review and Update RALPH.md
+
+**Read sprint_summary.md** (just generated in step 5).
+
+Extract learnings from:
+- "What to Improve" section
+- "Recommendations for Next Sprint" section
+- "Unresolved Blockers" section (if exists)
+
+**Read current RALPH.md** from project root.
+
+**Identify what needs updating:**
+
+Look for learnings that should be documented in RALPH.md:
+
+**Technical discoveries:**
+- New patterns discovered (e.g., "Playwright needs explicit wait for ZGAI streaming")
+- Tool configurations (e.g., "ESLint must disable react-hooks/exhaustive-deps for streaming")
+- Framework quirks (e.g., "Drizzle ORM can't handle JSON columns without explicit cast")
+
+**Process improvements:**
+- What worked (e.g., "Clear specs in specs/ reduced ambiguity")
+- What didn't (e.g., "Integration tasks should be planned earlier")
+- Dependencies to document (e.g., "Need staging credentials before building data features")
+
+**Project-specific patterns:**
+- Testing strategies that worked
+- Deployment gotchas
+- Environment setup requirements
+
+**Don't add:**
+- Generic advice (e.g., "write clear specs") - too obvious
+- One-off issues (e.g., "Task #5 had a typo") - not repeatable
+- Performance metrics - those belong in sprint_summary.md
+
+**Update RALPH.md:**
+
+Add learnings to appropriate sections in RALPH.md:
+
+**If "Learned Lessons" section exists:**
+Add new learnings there with sprint reference:
+```markdown
+## Learned Lessons
+
+### Sprint [N]: [Theme]
+
+**[Category]:**
+- [Learning]: [Description and why it matters]
+- [Learning]: [Description and why it matters]
+
+[Previous sprint learnings continue below...]
+```
+
+**If no "Learned Lessons" section:**
+Create it before the last section (usually "Notes for Ralph"):
+```markdown
+---
+
+## Learned Lessons
+
+Document discoveries and patterns from completed sprints.
+
+### Sprint [N]: [Theme]
+
+**[Category]:**
+- [Learning]: [Description]
+
+---
+```
+
+**Categories for learnings:**
+- **Testing:** Test framework decisions, patterns that work
+- **Integration:** Service communication, API contracts
+- **Deployment:** Staging/production gotchas
+- **Tools:** Framework quirks, library configurations
+- **Process:** Planning, specs clarity, task sequencing
+
+**Example update:**
+```markdown
+### Sprint 2: Jira Integration
+
+**Testing:**
+- Playwright needs explicit `waitForSelector` for ZGAI streaming responses (streaming completes after initial render)
+
+**Integration:**
+- Plan integration tasks after implementing 2-3 isolated services (discovered need for orchestration after 8 services)
+
+**Process:**
+- Clear specs in specs/ reduced blockers - only 1 ambiguity blocker vs 4 in Sprint 1
+```
+
+**Write updated RALPH.md** back to project root.
+
+**Report what changed:**
+```
+Updated RALPH.md:
+- Added [X] learnings from Sprint [N]
+- Categories: [Testing, Integration, Process, ...]
+```
+
+If no updates needed:
+```
+RALPH.md: No new learnings to add (current instructions still accurate)
+```
+
+### 12. Report Completion
 
 ```
 === Sprint Archived ===
@@ -367,6 +472,7 @@ Archived to:
 
 Updated:
 - sprints/sprint_history.md
+- RALPH.md ([X] learnings added)
 
 Fresh sprint_plan.md created for Sprint #[N+1].
 
@@ -374,7 +480,7 @@ Ready to start next sprint!
 Run /ralph-plan to generate plan, or add tasks to sprint_plan.md manually.
 ```
 
-### 12. STOP
+### 13. STOP
 
 Archiving is complete. User can now start planning next sprint.
 
