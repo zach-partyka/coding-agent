@@ -26,7 +26,6 @@ AI-powered sprint execution. Define what to build, Ralph implements and deploys 
 **Everyone:**
 - Claude Code CLI (`claude --version` works)
 - Git repository with HTTPS remote
-- Ralph skills installed (`claude` then `/ralph` autocompletes)
 
 > **Windows:** Use Git Bash for all commands, not PowerShell/CMD.
 
@@ -48,7 +47,7 @@ cd /path/to/your/project
 /path/to/ralph-starter-kit/scripts/setup.sh
 ```
 
-Creates: `ralph.config.sh`, `RALPH.md`, `sprint_plan.md`, `specs/`, `stdlib/`
+Installs Ralph skills and creates: `ralph.config.sh`, `RALPH.md`, `sprint_plan.md`, `specs/`, `stdlib/`
 
 ### 3. Run
 
@@ -117,7 +116,7 @@ Each has: config, build instructions, specs, code patterns.
 - Zillow: [ServiceNow](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9)
 
 **"/ralph not found":**
-- Skills missing. Contact team lead.
+- Skills not installed. Run setup.sh again or verify `~/.claude/skills/` has ralph directories.
 
 **Tests fail:**
 - Run test command manually

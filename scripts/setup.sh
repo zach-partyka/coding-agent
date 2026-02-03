@@ -299,6 +299,24 @@ else
   echo "✓ ralph-continuous.sh already installed at $GLOBAL_RALPH_SCRIPT"
 fi
 
+# Install Ralph skills to Claude Code (one-time)
+CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
+if [ -d "$STARTER_KIT_DIR/skills" ]; then
+  echo "Installing Ralph skills to Claude Code..."
+  mkdir -p "$CLAUDE_SKILLS_DIR"
+
+  for skill in ralph ralph-plan ralph-continuous ralph-archive; do
+    if [ ! -d "$CLAUDE_SKILLS_DIR/$skill" ]; then
+      cp -r "$STARTER_KIT_DIR/skills/$skill" "$CLAUDE_SKILLS_DIR/"
+      echo "✓ Installed $skill skill"
+    else
+      echo "✓ $skill skill already installed"
+    fi
+  done
+else
+  echo "⚠️  Skills directory not found in starter kit"
+fi
+
 # Create sprint_plan.md if it doesn't exist
 if [ ! -f "$PROJECT_DIR/sprint_plan.md" ]; then
   echo "Creating sprint_plan.md..."
