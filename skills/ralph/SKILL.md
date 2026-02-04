@@ -659,6 +659,32 @@ npx playwright test --config=playwright.config.ts
 
 **Update sprint_plan.md DURING work, not just at the end:**
 
+---
+
+## ⚠️ CRITICAL: Time & Cost Tracking is MANDATORY
+
+**For EVERY task, you MUST:**
+1. ✅ Capture start timestamp with `date +%s` when starting
+2. ✅ Record it in sprint_plan.md immediately
+3. ✅ Capture end timestamp when completing
+4. ✅ Calculate actual duration: `(end - start) / 60`
+5. ✅ Track token usage from system warnings (input/output)
+6. ✅ Calculate cost: (tokens / 1M) × model pricing
+7. ✅ Show calculation in completion entry
+
+**NO ESTIMATES ALLOWED:**
+- ❌ "Duration: ~10 min" - INVALID
+- ❌ "Duration: about 8 minutes" - INVALID
+- ❌ "Cost: roughly $0.20" - INVALID
+- ✅ "Duration: 8 min (calculated: (end - start) / 60)" - VALID
+- ✅ "Performance: 8 min | 12.5K in, 3.2K out | $0.09" - VALID
+
+**Why this matters:** Accurate time AND cost tracking is required for ROI metrics and business case. We need to demonstrate value vs. engineer baseline ($50-75/hr × 6-8 hours = $300-600 for equivalent work).
+
+**Human will verify:** After you report "task complete", human will check for timestamps, token usage, and cost calculation. If missing, completion will be rejected.
+
+---
+
 **A. When starting a task:**
 
 First, capture start timestamp:

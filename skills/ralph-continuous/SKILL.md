@@ -89,6 +89,17 @@ The script:
 
 Switch between tabs to watch any task. Each tab stays open after completion so you can review the history.
 
+**📊 Time & Cost Tracking:**
+
+Each task tab runs `/ralph`, which **automatically tracks**:
+- Start timestamp (captured with `date +%s`)
+- End timestamp (captured on completion)
+- Duration (calculated from timestamps)
+- Token usage (input/output from system warnings)
+- Cost (calculated from tokens × model pricing)
+
+NO action needed - tracking happens automatically in each `/ralph` invocation. See `/ralph` skill instructions for details.
+
 ---
 
 ## Architecture

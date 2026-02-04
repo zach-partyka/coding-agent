@@ -33,7 +33,15 @@
 
 ## Notes
 
-[Any context, decisions, or reminders for this sprint]
+**Timestamp Tracking (MANDATORY):**
+- Every task MUST have start timestamp captured with `date +%s`
+- Every completed task MUST show end timestamp and calculated duration
+- NO estimates allowed ("~10 min" is invalid)
+- Format: `Duration: 8 min (calculated: (end - start) / 60)`
+- Verification: grep for "Start timestamp" in completed tasks
+- This is required for accurate ROI metrics and business case
+
+[Any additional context, decisions, or reminders for this sprint]
 
 ## Sprint History
 

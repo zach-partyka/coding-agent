@@ -72,6 +72,55 @@ Required for local development:
 Required for testing:
 - `[VAR_NAME]`: [Description]
 
+## ⚠️ MANDATORY: Time Tracking for Every Task
+
+**Ralph MUST capture timestamps for every task. No estimates allowed.**
+
+**When starting a task:**
+```bash
+date +%s  # Capture start timestamp
+```
+Record in sprint_plan.md:
+```markdown
+- [ ] **#N** Task name - IN PROGRESS
+  - Started: 2026-02-04
+  - Start timestamp: 1770220881
+```
+
+**When completing a task:**
+```bash
+date +%s  # Capture end timestamp
+```
+Calculate duration: `(end - start) / 60 = minutes`
+
+**Cost Calculation:**
+1. Track tokens from system warnings (e.g., "Token usage: 12500/200000")
+2. Use pricing: Input $3/M tokens, Output $15/M tokens
+3. Calculate: `(input_tokens/1000000 × $3) + (output_tokens/1000000 × $15)`
+
+**Required format for completed tasks:**
+```markdown
+- [x] **#N** Task name - 2026-02-04
+  - Start timestamp: 1770220881
+  - End timestamp: 1770221361
+  - Duration: 8 min (calculated: (end - start) / 60)
+  - Performance: 8 min | 12.5K in, 3.2K out | $0.09
+```
+
+**Verification (for humans):**
+```bash
+# Check for timestamps
+grep -A 5 "^- \[x\].*$(date +%Y-%m-%d)" sprint_plan.md | grep "Start timestamp"
+
+# Check for calculation (not estimate)
+grep -A 5 "^- \[x\].*$(date +%Y-%m-%d)" sprint_plan.md | grep "calculated:"
+
+# Reject if you see estimates
+! grep -A 5 "^- \[x\].*$(date +%Y-%m-%d)" sprint_plan.md | grep "Duration: ~"
+```
+
+**Why this matters:** ROI demonstration requires accurate metrics. Engineer baseline: $50-75/hr × 6-8 hours = $300-600. Ralph must track precisely to show >95% cost reduction.
+
 ## Learned Lessons
 
 [Add lessons as Ralph makes mistakes or you discover better patterns]
