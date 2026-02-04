@@ -265,20 +265,20 @@ Claude: [Creates investigation task, continues to next item...]
 ```
 Claude: "Found completed Sprint 4 that hasn't been archived yet.
          I need to archive it before planning the next sprint.
-
+         
          Archiving Sprint 4 now..."
-
+         
          [Runs ralph-archive workflow]
-
+         
          "Sprint 4 archived successfully!
          - 3 tasks completed
          - ~16 min duration
          - ~$0.50 cost
-
+         
          Now let's plan Sprint 5.
-
+         
          Found 3 backlog items from Sprint 4 recommendations.
-
+         
          What should Sprint 5 focus on?"
          [Backlog items] [New feature] [Bug fixes] [Tech debt]
 

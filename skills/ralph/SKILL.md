@@ -341,7 +341,32 @@ Before marking complete:
 Task is NOT complete until all boxes checked.
 ```
 
-**Playwright test template:**
+**How to write tests (two options):**
+
+**Option 1: Use AI Test Generator (Recommended)**
+
+The project has Playwright AI agents available. Use them:
+
+1. **Verify agents are initialized:**
+   ```bash
+   ls .claude/agents/playwright-test-*.md
+   ```
+   Expected: 3 agent files (generator, healer, planner)
+
+2. **Invoke test-generator agent:**
+   - Describe the feature behavior to test
+   - Agent will execute actions in real browser
+   - Agent generates test code automatically
+   - Test is saved to tests/[feature].spec.ts
+
+3. **Verify test works:**
+   ```bash
+   npm test -- tests/[feature].spec.ts
+   ```
+
+**Option 2: Write test manually (if agents unavailable)**
+
+Use this template:
 ```typescript
 // tests/[feature].spec.ts
 import { test, expect } from '@playwright/test';
@@ -606,14 +631,24 @@ npx playwright test --config=playwright.config.ts
    Screenshot: [if available]
    ```
 
-2. **Create fix branch:**
-   ```bash
-   git checkout -b ralph/fix-task-{N}-{attempt}
-   ```
+2. **Determine failure type:**
 
-3. **Fix the issue and repeat from step 7**
+   **If test is broken due to code changes (not a bug):**
+   - Use playwright-test-healer agent to fix the test
+   - Agent analyzes failure and updates test to match new behavior
+   - Re-run tests to verify fix
+   - Commit updated test with fix
 
-4. **If unable to fix after 2 attempts:**
+   **If implementation has a bug:**
+   - Create fix branch:
+     ```bash
+     git checkout -b ralph/fix-task-{N}-{attempt}
+     ```
+   - Fix the bug in implementation code
+   - Re-run tests to verify
+   - Commit and push fix
+
+3. **If unable to fix after 2 attempts:**
    - Update sprint_plan.md with BLOCKED status
    - Document what failed and why
    - Human must investigate

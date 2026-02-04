@@ -104,12 +104,20 @@ Switch between tabs to watch any task. Each tab stays open after completion so y
           ▼ (opens new tab)
 ┌─────────────────────────────────────────┐
 │  Task Tab (real TTY!)                   │
+│  - Invokes /ralph for each task         │
 │  - Full interactive Claude UI           │
 │  - Colored diffs, tool calls            │
+│  - Uses Playwright AI agents            │
 │  - Touches marker file on completion    │
 │  - Stays open for review                │
 └─────────────────────────────────────────┘
 ```
+
+**Each task runs the base `/ralph` skill, which includes:**
+- Test requirement detection (step 5.75)
+- Playwright AI test generation (via playwright-test-generator agent)
+- E2E test execution against staging (step 10)
+- Test healing when tests fail (via playwright-test-healer agent)
 
 ---
 
@@ -179,3 +187,37 @@ Uses `--dangerously-skip-permissions` for auto-approval.
 3. Run `git status` to check for uncommitted changes
 
 Ralph now includes visual verification steps, but human QA remains the final safety net.
+
+---
+
+## Playwright AI Agents Integration
+
+Each task invoked by ralph-continuous uses the base `/ralph` skill, which includes Playwright AI agent support:
+
+**Test Generation (Step 5.75):**
+- Detects when tests are required (user-facing features, forms, auth, APIs)
+- Invokes `playwright-test-generator` agent to create tests automatically
+- Generated tests saved to `tests/*.spec.ts`
+
+**Test Execution (Step 10):**
+- Runs `npm test` against staging after deployment
+- All E2E tests must pass before task is marked complete
+
+**Test Healing (Step 10):**
+- If tests fail due to code changes (not bugs), invokes `playwright-test-healer` agent
+- Agent fixes tests automatically to match new behavior
+- Re-runs tests to verify fix
+
+**Setup Required:**
+```bash
+# Must be run before using ralph-continuous
+npx playwright install chromium
+npx playwright init-agents --loop=claude --prompts
+```
+
+**Verify agents available:**
+```bash
+ls .claude/agents/playwright-test-*.md
+```
+
+Expected: 3 agents (generator, healer, planner)
