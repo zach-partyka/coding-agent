@@ -36,7 +36,19 @@ Task start timestamp: $TASK_START_TS
 When done: touch $MARKER_DIR/task-done
 If sprint complete: touch $MARKER_DIR/sprint-complete"
 
-# Show completion message
+# Capture end time and calculate duration
+TASK_END_TS=$(date +%s)
+TASK_DURATION=$(( (TASK_END_TS - TASK_START_TS) / 60 ))
+
+# Show completion summary
 echo ""
-echo -e "${GREEN}✓ Task complete - Close tab when ready${NC}"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}  Task Complete${NC}"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e "  Started:  $(date -r $TASK_START_TS '+%Y-%m-%d %H:%M:%S')"
+echo -e "  Ended:    $(date -r $TASK_END_TS '+%Y-%m-%d %H:%M:%S')"
+echo -e "  Duration: ${TASK_DURATION} minutes"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${BLUE}Close tab when ready${NC}"
 echo ""
