@@ -414,6 +414,27 @@ START_TIME=$(date +%s)
 
 # Main loop
 while true; do
+  # Check blocking FIRST before checking completion
+  if check_blocked; then
+    # Tasks are blocked - check if ALL remaining tasks are blocked
+    if ! check_tasks_remain; then
+      echo ""
+      echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+      echo -e "${YELLOW}  Sprint Blocked${NC}"
+      echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+      echo ""
+      echo "All remaining tasks are blocked."
+      echo "Check sprint_plan.md for BLOCKED status and resolve."
+      echo ""
+      echo -e "${BLUE}Next steps:${NC}"
+      echo "  1. Fix blocking issues (environment, dependencies, etc.)"
+      echo "  2. Run ralph-continuous.sh again to complete blocked tasks"
+      echo ""
+      log "Sprint blocked - all remaining tasks blocked after $TASK_COUNT iterations"
+      break
+    fi
+  fi
+  
   if ! check_tasks_remain; then
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
