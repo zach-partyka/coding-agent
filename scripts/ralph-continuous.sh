@@ -177,16 +177,15 @@ spawn_in_terminal() {
 
   # Create the command that will run in the new window
   local dir_name=$(basename "$PROJECT_DIR")
-  local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
+  
+  # Build clean command with clear output suppression
+  local cmd="clear && cd '$PROJECT_DIR' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n' && printf '\033[0;34m  Ralph Task #$task_num\033[0m\n' && printf '\033[0;34m  Project: $dir_name\033[0m\n' && printf '\033[0;34m  Started: $(date -r $task_start_ts \"+%Y-%m-%d %H:%M:%S\")\033[0m\n' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n\n' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
 
-📁 $dir_name
-
-Implement ONE task from sprint_plan.md, then signal completion.
-
-Task start timestamp: $task_start_ts (shell-enforced)
+Project directory: $PROJECT_DIR
+Task start timestamp: $task_start_ts
 
 When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete'"
+If sprint complete: touch $MARKER_DIR/sprint-complete' && printf '\n\033[0;32m✓ Task complete - Close tab when ready\033[0m\n'"
 
   # 'do script' without 'in window' opens a new window - no accessibility permissions needed
   osascript <<EOF
@@ -207,16 +206,15 @@ spawn_in_iterm() {
   echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
 
   local dir_name=$(basename "$PROJECT_DIR")
-  local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
+  
+  # Build clean command with clear output suppression
+  local cmd="clear && cd '$PROJECT_DIR' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n' && printf '\033[0;34m  Ralph Task #$task_num\033[0m\n' && printf '\033[0;34m  Project: $dir_name\033[0m\n' && printf '\033[0;34m  Started: $(date -r $task_start_ts \"+%Y-%m-%d %H:%M:%S\")\033[0m\n' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n\n' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
 
-📁 $dir_name
-
-Implement ONE task from sprint_plan.md, then signal completion.
-
-Task start timestamp: $task_start_ts (shell-enforced)
+Project directory: $PROJECT_DIR
+Task start timestamp: $task_start_ts
 
 When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete'"
+If sprint complete: touch $MARKER_DIR/sprint-complete' && printf '\n\033[0;32m✓ Task complete - Close tab when ready\033[0m\n'"
 
   # Use tabs in existing window, or create first window if none exists
   osascript <<EOF
@@ -249,16 +247,14 @@ spawn_in_windows_terminal() {
   
   local dir_name=$(basename "$PROJECT_DIR")
 
-  local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
+  # Build clean command
+  local cmd="clear && cd '$PROJECT_DIR' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n' && printf '\033[0;34m  Ralph Task #$task_num\033[0m\n' && printf '\033[0;34m  Project: $dir_name\033[0m\n' && printf '\033[0;34m  Started: $(date -r $task_start_ts \"+%Y-%m-%d %H:%M:%S\")\033[0m\n' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n\n' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
 
-📁 $dir_name
-
-Implement ONE task from sprint_plan.md, then signal completion.
-
-Task start timestamp: $task_start_ts (shell-enforced)
+Project directory: $PROJECT_DIR
+Task start timestamp: $task_start_ts
 
 When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete'"
+If sprint complete: touch $MARKER_DIR/sprint-complete' && printf '\n\033[0;32m✓ Task complete - Close tab when ready\033[0m\n'"
 
   # Spawn tab - wt.exe will error if profile doesn't exist
   if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$cmd" 2>/dev/null; then
@@ -297,14 +293,27 @@ spawn_inline() {
   echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
   
   local dir_name=$(basename "$PROJECT_DIR")
+  
+  # Display clean banner
+  echo ""
+  echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+  echo -e "${BLUE}  Ralph Task #$task_num${NC}"
+  echo -e "${BLUE}  Project: $dir_name${NC}"
+  echo -e "${BLUE}  Started: $(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')${NC}"
+  echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+  echo ""
 
   claude --dangerously-skip-permissions "/ralph
 
-📁 $dir_name
+Project directory: $PROJECT_DIR
+Task start timestamp: $task_start_ts
 
-Implement ONE task from sprint_plan.md, then signal completion.
-
-Task start timestamp: $task_start_ts (shell-enforced)"
+When done: touch $MARKER_DIR/task-done
+If sprint complete: touch $MARKER_DIR/sprint-complete"
+  
+  echo ""
+  echo -e "${GREEN}✓ Task complete${NC}"
+  echo ""
 }
 
 # Wait for task completion via marker file, then close the terminal
