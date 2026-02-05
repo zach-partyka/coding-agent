@@ -175,17 +175,12 @@ spawn_in_terminal() {
   local task_start_ts=$(date +%s)
   echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
 
-  # Create the command that will run in the new window
-  local dir_name=$(basename "$PROJECT_DIR")
-  
-  # Build clean command with clear output suppression
-  local cmd="clear && cd '$PROJECT_DIR' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n' && printf '\033[0;34m  Ralph Task #$task_num\033[0m\n' && printf '\033[0;34m  Project: $dir_name\033[0m\n' && printf '\033[0;34m  Started: $(date -r $task_start_ts \"+%Y-%m-%d %H:%M:%S\")\033[0m\n' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n\n' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
+  # Get wrapper script path
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="$script_dir/ralph-task-wrapper.sh"
 
-Project directory: $PROJECT_DIR
-Task start timestamp: $task_start_ts
-
-When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete' && printf '\n\033[0;32m✓ Task complete - Close tab when ready\033[0m\n'"
+  # Simple command that calls wrapper script
+  local cmd="'$wrapper' '$task_num' '$PROJECT_DIR' '$task_start_ts' '$MARKER_DIR'"
 
   # 'do script' without 'in window' opens a new window - no accessibility permissions needed
   osascript <<EOF
@@ -205,16 +200,12 @@ spawn_in_iterm() {
   local task_start_ts=$(date +%s)
   echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
 
-  local dir_name=$(basename "$PROJECT_DIR")
-  
-  # Build clean command with clear output suppression
-  local cmd="clear && cd '$PROJECT_DIR' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n' && printf '\033[0;34m  Ralph Task #$task_num\033[0m\n' && printf '\033[0;34m  Project: $dir_name\033[0m\n' && printf '\033[0;34m  Started: $(date -r $task_start_ts \"+%Y-%m-%d %H:%M:%S\")\033[0m\n' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n\n' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
+  # Get wrapper script path
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="$script_dir/ralph-task-wrapper.sh"
 
-Project directory: $PROJECT_DIR
-Task start timestamp: $task_start_ts
-
-When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete' && printf '\n\033[0;32m✓ Task complete - Close tab when ready\033[0m\n'"
+  # Simple command that calls wrapper script
+  local cmd="'$wrapper' '$task_num' '$PROJECT_DIR' '$task_start_ts' '$MARKER_DIR'"
 
   # Use tabs in existing window, or create first window if none exists
   osascript <<EOF
@@ -245,16 +236,12 @@ spawn_in_windows_terminal() {
   local task_start_ts=$(date +%s)
   echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
   
-  local dir_name=$(basename "$PROJECT_DIR")
+  # Get wrapper script path
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="$script_dir/ralph-task-wrapper.sh"
 
-  # Build clean command
-  local cmd="clear && cd '$PROJECT_DIR' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n' && printf '\033[0;34m  Ralph Task #$task_num\033[0m\n' && printf '\033[0;34m  Project: $dir_name\033[0m\n' && printf '\033[0;34m  Started: $(date -r $task_start_ts \"+%Y-%m-%d %H:%M:%S\")\033[0m\n' && printf '\033[0;34m═══════════════════════════════════════════════════════════\033[0m\n\n' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
-
-Project directory: $PROJECT_DIR
-Task start timestamp: $task_start_ts
-
-When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete' && printf '\n\033[0;32m✓ Task complete - Close tab when ready\033[0m\n'"
+  # Simple command that calls wrapper script
+  local cmd="'$wrapper' '$task_num' '$PROJECT_DIR' '$task_start_ts' '$MARKER_DIR'"
 
   # Spawn tab - wt.exe will error if profile doesn't exist
   if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$cmd" 2>/dev/null; then
@@ -292,28 +279,12 @@ spawn_inline() {
   local task_start_ts=$(date +%s)
   echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
   
-  local dir_name=$(basename "$PROJECT_DIR")
+  # Get wrapper script path
+  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="$script_dir/ralph-task-wrapper.sh"
   
-  # Display clean banner
-  echo ""
-  echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-  echo -e "${BLUE}  Ralph Task #$task_num${NC}"
-  echo -e "${BLUE}  Project: $dir_name${NC}"
-  echo -e "${BLUE}  Started: $(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')${NC}"
-  echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-  echo ""
-
-  claude --dangerously-skip-permissions "/ralph
-
-Project directory: $PROJECT_DIR
-Task start timestamp: $task_start_ts
-
-When done: touch $MARKER_DIR/task-done
-If sprint complete: touch $MARKER_DIR/sprint-complete"
-  
-  echo ""
-  echo -e "${GREEN}✓ Task complete${NC}"
-  echo ""
+  # Call wrapper script directly
+  "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR"
 }
 
 # Wait for task completion via marker file, then close the terminal
