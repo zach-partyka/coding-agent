@@ -171,6 +171,10 @@ detect_terminal() {
 spawn_in_terminal() {
   local task_num=$1
 
+  # Capture task start timestamp (shell-enforced)
+  local task_start_ts=$(date +%s)
+  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+
   # Create the command that will run in the new window
   local dir_name=$(basename "$PROJECT_DIR")
   local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
@@ -178,6 +182,8 @@ spawn_in_terminal() {
 📁 $dir_name
 
 Implement ONE task from sprint_plan.md, then signal completion.
+
+Task start timestamp: $task_start_ts (shell-enforced)
 
 When done: touch $MARKER_DIR/task-done
 If sprint complete: touch $MARKER_DIR/sprint-complete'"
@@ -196,12 +202,18 @@ EOF
 spawn_in_iterm() {
   local task_num=$1
 
+  # Capture task start timestamp (shell-enforced)
+  local task_start_ts=$(date +%s)
+  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+
   local dir_name=$(basename "$PROJECT_DIR")
   local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
 
 📁 $dir_name
 
 Implement ONE task from sprint_plan.md, then signal completion.
+
+Task start timestamp: $task_start_ts (shell-enforced)
 
 When done: touch $MARKER_DIR/task-done
 If sprint complete: touch $MARKER_DIR/sprint-complete'"
@@ -230,6 +242,11 @@ EOF
 # Spawn Claude in a new Windows Terminal tab
 spawn_in_windows_terminal() {
   local task_num=$1
+  
+  # Capture task start timestamp (shell-enforced)
+  local task_start_ts=$(date +%s)
+  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+  
   local dir_name=$(basename "$PROJECT_DIR")
 
   local cmd="cd '$PROJECT_DIR' && claude --dangerously-skip-permissions --max-turns 50 '/ralph
@@ -237,6 +254,8 @@ spawn_in_windows_terminal() {
 📁 $dir_name
 
 Implement ONE task from sprint_plan.md, then signal completion.
+
+Task start timestamp: $task_start_ts (shell-enforced)
 
 When done: touch $MARKER_DIR/task-done
 If sprint complete: touch $MARKER_DIR/sprint-complete'"
@@ -272,13 +291,20 @@ Implement ONE task from sprint_plan.md, then signal completion."
 # Spawn inline (true fallback - no TTY benefits)
 spawn_inline() {
   local task_num=$1
+  
+  # Capture task start timestamp (shell-enforced)
+  local task_start_ts=$(date +%s)
+  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+  
   local dir_name=$(basename "$PROJECT_DIR")
 
   claude --dangerously-skip-permissions "/ralph
 
 📁 $dir_name
 
-Implement ONE task from sprint_plan.md, then signal completion."
+Implement ONE task from sprint_plan.md, then signal completion.
+
+Task start timestamp: $task_start_ts (shell-enforced)"
 }
 
 # Wait for task completion via marker file, then close the terminal

@@ -103,7 +103,26 @@ Why: Blocks validation layer and all downstream features
 
 ### 4.5 Clock In - Capture Start Timestamp (MANDATORY)
 
-**BEFORE proceeding with search or implementation, capture timestamp:**
+**Step 1: Check if shell already captured timestamp**
+
+First, check if the user prompt contains a pre-captured timestamp from the shell script:
+
+```
+Look for: "Task start timestamp: [10-digit number] (shell-enforced)"
+```
+
+**If shell timestamp found (PREFERRED METHOD):**
+
+```bash
+# Extract timestamp from prompt
+start_ts=1706294400  # (extracted from "Task start timestamp: 1706294400")
+
+echo "✓ Using shell-enforced timestamp: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
+```
+
+**If NO shell timestamp in prompt (FALLBACK):**
+
+Capture manually (but warn this is less reliable):
 
 ```bash
 start_ts=$(date +%s)
@@ -114,10 +133,11 @@ if [[ ! "$start_ts" =~ ^[0-9]{10}$ ]]; then
   exit 1
 fi
 
-echo "✓ Clocked in at: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
+echo "⚠️  Manual timestamp capture: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
+echo "   Note: Shell-enforced timestamps are more accurate"
 ```
 
-**Immediately update sprint_plan.md:**
+**Step 2: Immediately update sprint_plan.md:**
 
 ```markdown
 1. [#1] Brief → audience logic mapper - IN PROGRESS
@@ -128,15 +148,16 @@ echo "✓ Clocked in at: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
 
 **CRITICAL: DO NOT proceed to step 5 until:**
 
-1. Timestamp is captured successfully
+1. Timestamp is captured successfully (shell or manual)
 2. Timestamp is recorded in sprint_plan.md
 3. Verification confirms timestamp is valid
 
-**Why this matters:**
+**Why shell-enforced is preferred:**
 
-- All task work (search, implementation, testing) must be included in duration
-- Choosing which task to do is overhead, not task-specific work
-- Once you announce the task, you're committed - clock in immediately
+- ✅ Shell captures BEFORE Claude starts (includes startup time)
+- ✅ Shell calculates duration AFTER Claude exits (includes all work)
+- ✅ 100% reliable - no AI decisions involved
+- ✅ Captures true wall-clock time
 
 **What gets included in task duration:**
 

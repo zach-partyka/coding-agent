@@ -111,9 +111,41 @@ Project directory: $PROJECT_DIR"
 else
   # Build mode (one thing) - use /ralph skill
   echo "Starting build mode (one task)..."
+  
+  # Capture start timestamp (shell-enforced time tracking)
+  TASK_START_TS=$(date +%s)
+  echo "✓ Task clocked in: $(date -r $TASK_START_TS '+%Y-%m-%d %H:%M:%S') (timestamp: $TASK_START_TS)"
+  echo ""
+  
   claude --dangerously-skip-permissions "/ralph
 
-Project directory: $PROJECT_DIR"
+Project directory: $PROJECT_DIR
+Task start timestamp: $TASK_START_TS (shell-enforced)"
+
+  # Capture end timestamp and calculate duration
+  TASK_END_TS=$(date +%s)
+  TASK_DURATION=$(( (TASK_END_TS - TASK_START_TS) / 60 ))
+  
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+  echo "  Task Timing (Shell-Enforced)"
+  echo "═══════════════════════════════════════════════════════════"
+  echo "Started:  $(date -r $TASK_START_TS '+%Y-%m-%d %H:%M:%S')"
+  echo "Ended:    $(date -r $TASK_END_TS '+%Y-%m-%d %H:%M:%S')"
+  echo "Duration: ${TASK_DURATION} minutes"
+  echo ""
+  
+  # Verify timestamp was recorded in sprint_plan.md
+  if [ -f "sprint_plan.md" ]; then
+    if grep -q "Start timestamp: $TASK_START_TS" sprint_plan.md; then
+      echo "✓ Timestamp verified in sprint_plan.md"
+    else
+      echo "⚠️  WARNING: Start timestamp not found in sprint_plan.md"
+      echo "   Shell captured: $TASK_START_TS"
+      echo "   Duration: ${TASK_DURATION} minutes"
+      echo "   You may need to manually add this to the completed task entry"
+    fi
+  fi
 
   # Post-run verification
   echo ""
