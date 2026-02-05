@@ -418,30 +418,45 @@ while true; do
   if check_blocked; then
     # Tasks are blocked - check if ALL remaining tasks are blocked
     if ! check_tasks_remain; then
+      # Extract sprint name from sprint_plan.md
+      local project_name=$(basename "$PROJECT_DIR")
+      local sprint_name=$(grep -E "^#\s*Sprint\s+[0-9]+" "$FIX_PLAN" | head -1 | sed 's/^#\s*//' || echo "Current Sprint")
+      
       echo ""
       echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-      echo -e "${YELLOW}  Sprint Blocked${NC}"
+      echo -e "${YELLOW}  Sprint Blocked: ${sprint_name}${NC}"
+      echo -e "${YELLOW}  Project: ${project_name}${NC}"
       echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
       echo ""
       echo "All remaining tasks are blocked."
-      echo "Check sprint_plan.md for BLOCKED status and resolve."
+      echo ""
+      echo -e "${BLUE}View details:${NC}"
+      echo "  file://$FIX_PLAN"
       echo ""
       echo -e "${BLUE}Next steps:${NC}"
       echo "  1. Fix blocking issues (environment, dependencies, etc.)"
       echo "  2. Run ralph-continuous.sh again to complete blocked tasks"
       echo ""
-      log "Sprint blocked - all remaining tasks blocked after $TASK_COUNT iterations"
+      log "Sprint blocked: $sprint_name - all remaining tasks blocked after $TASK_COUNT iterations"
       break
     fi
   fi
   
   if ! check_tasks_remain; then
+    # Extract sprint name from sprint_plan.md
+    local project_name=$(basename "$PROJECT_DIR")
+    local sprint_name=$(grep -E "^#\s*Sprint\s+[0-9]+" "$FIX_PLAN" | head -1 | sed 's/^#\s*//' || echo "Current Sprint")
+    
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  All tasks complete!${NC}"
+    echo -e "${GREEN}  All tasks complete: ${sprint_name}${NC}"
+    echo -e "${GREEN}  Project: ${project_name}${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    log "All tasks complete after $TASK_COUNT iterations"
+    log "All tasks complete: $sprint_name after $TASK_COUNT iterations"
 
+    echo ""
+    echo -e "${BLUE}View sprint details:${NC}"
+    echo "  file://$FIX_PLAN"
     echo ""
     echo -e "${BLUE}Next steps:${NC}"
     echo "  - Run /ralph-archive to archive this sprint"
