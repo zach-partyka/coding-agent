@@ -101,7 +101,72 @@ Category: Critical Path
 Why: Blocks validation layer and all downstream features
 ```
 
-### 4.5 Sprint Type Detection - Investigation First
+### 4.5 Clock In - Capture Start Timestamp (MANDATORY)
+
+**BEFORE proceeding with search or implementation, capture timestamp:**
+
+```bash
+start_ts=$(date +%s)
+
+# Verify timestamp is valid (10 digits, all numbers)
+if [[ ! "$start_ts" =~ ^[0-9]{10}$ ]]; then
+  echo "❌ ERROR: Failed to capture start timestamp. Got: $start_ts"
+  exit 1
+fi
+
+echo "✓ Clocked in at: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
+```
+
+**Immediately update sprint_plan.md:**
+
+```markdown
+1. [#1] Brief → audience logic mapper - IN PROGRESS
+   - Start timestamp: 1706294400
+   - Started: 2026-01-26
+   - Blockers: none
+```
+
+**CRITICAL: DO NOT proceed to step 5 until:**
+
+1. Timestamp is captured successfully
+2. Timestamp is recorded in sprint_plan.md
+3. Verification confirms timestamp is valid
+
+**Why this matters:**
+
+- All task work (search, implementation, testing) must be included in duration
+- Choosing which task to do is overhead, not task-specific work
+- Once you announce the task, you're committed - clock in immediately
+
+**What gets included in task duration:**
+
+INCLUDED:
+
+- ✓ Searching codebase for existing implementations
+- ✓ Reading specs and stdlib
+- ✓ Implementation work
+- ✓ Local validation (TypeScript compile)
+- ✓ Git workflow (commit, push, merge)
+- ✓ Waiting for staging deploy
+- ✓ Running Playwright tests
+- ✓ Fixing test failures
+- ✓ Updating sprint_plan.md
+
+NOT INCLUDED:
+
+- ✗ Reading sprint_plan.md to choose next task (overhead)
+- ✗ Deciding which task to pick (overhead)
+- ✗ Validating directory structure (overhead)
+- ✗ Reading RALPH.md for project context (overhead)
+
+**If timestamp capture fails:**
+
+- DO NOT proceed with the task
+- Report error: "Cannot start task - timestamp capture failed"
+- Mark task as BLOCKED in sprint_plan.md
+- Exit and require human intervention
+
+### 4.6 Sprint Type Detection - Investigation First
 
 **For performance or bug fix sprints, always start with investigation.**
 
@@ -147,6 +212,25 @@ Recommended fix order: [A, C, B] (based on impact/effort)
 - Continuation of previous sprint's work
 
 ### 5. Search Codebase - "Search Before Build" Rule
+
+**BEFORE searching, verify you're clocked in:**
+
+```bash
+# Extract current task number from step 4 announcement
+CURRENT_TASK="[task number from step 4]"
+
+# Verify start timestamp exists in sprint_plan.md
+if ! grep -A 3 "\[#${CURRENT_TASK}\]" sprint_plan.md | grep -q "Start timestamp:"; then
+  echo "❌ FATAL ERROR: Cannot proceed - start timestamp not captured"
+  echo "You must clock in (step 4.5) before starting task work"
+  echo "Current task: #${CURRENT_TASK}"
+  exit 1
+fi
+
+echo "✓ Clock-in verified - proceeding with search"
+```
+
+**Then proceed with MANDATORY SEARCH STEPS:**
 
 **CRITICAL:** Before writing ANY new code, search thoroughly using parallel subagents.
 
@@ -655,6 +739,64 @@ npx playwright test --config=playwright.config.ts
 
 **Principle:** Code isn't done until it works in staging. "It worked locally" is not acceptable.
 
+### 10.75. Rollback on Catastrophic Test Failures
+
+**If Playwright tests fail catastrophically (>50% failure rate):**
+
+Not just broken tests - staging is broken and unusable.
+
+**Triggers:**
+- More than 50% of tests failing
+- Critical user flows completely broken (login, navigation, etc.)
+- Staging returns 500 errors or is unresponsive
+
+**Rollback procedure:**
+
+1. **Revert the merge commit:**
+   ```bash
+   git revert HEAD
+   git push origin main
+   ```
+
+2. **Wait for staging to re-deploy:**
+   ```bash
+   sleep 300  # Wait 5 minutes for rollback deploy
+   curl -s -o /dev/null -w "%{http_code}" https://[staging-url]/health
+   ```
+
+3. **Update sprint_plan.md:**
+   ```markdown
+   1. [#X] Task name - BLOCKED
+     - Blockers: Catastrophic test failures, staging rolled back
+     - Why rolled back: [X]% of tests failing, staging unusable
+     - What failed: [list of test failures]
+     - Next steps: Fix issues locally, re-run tests before re-deploying
+   ```
+
+4. **Report to user:**
+   ```
+   🚨 ROLLED BACK - Catastrophic Test Failure
+
+   Tests failed: [X]% failure rate
+   Critical flows broken: [list]
+
+   Actions taken:
+   - Reverted merge commit
+   - Staging rolled back to previous working state
+   - Task marked BLOCKED in sprint_plan.md
+
+   Next steps:
+   1. Review test failures locally
+   2. Fix implementation issues
+   3. Run tests locally before re-deploying
+   ```
+
+**If rollback fails or staging still broken:**
+
+- Mark task as BLOCKED
+- Alert user that manual intervention is required
+- Do NOT proceed with additional rollback attempts
+
 ### 11. Update sprint_plan.md - Real-Time Updates
 
 **Update sprint_plan.md DURING work, not just at the end:**
@@ -810,6 +952,45 @@ Calculate tokens used for THIS task:
 
 If can't calculate delta (no baseline), note current total and mark as "partial tracking".
 
+**Step 2.5: Validate Token Counts**
+
+After extracting token usage from system warnings, validate:
+
+```bash
+input_tokens=12500
+output_tokens=3200
+
+# Sanity check input tokens (1K-200K expected for normal tasks)
+if [ $input_tokens -lt 1000 ]; then
+  echo "⚠️  WARNING: Input tokens ${input_tokens} seems too low (<1K)"
+  echo "Double-check token extraction from system warnings"
+elif [ $input_tokens -gt 200000 ]; then
+  echo "⚠️  WARNING: Input tokens ${input_tokens} approaching context limit"
+  echo "Task may have hit context window constraint"
+fi
+
+# Sanity check output tokens (100-50K expected)
+if [ $output_tokens -lt 100 ]; then
+  echo "⚠️  WARNING: Output tokens ${output_tokens} seems too low"
+elif [ $output_tokens -gt 50000 ]; then
+  echo "⚠️  WARNING: Output tokens ${output_tokens} seems unusually high"
+fi
+
+# Check output/input ratio (typically 10-30%)
+ratio=$(( output_tokens * 100 / input_tokens ))
+if [ $ratio -lt 5 ]; then
+  echo "⚠️  WARNING: Output/input ratio ${ratio}% seems low (<5%)"
+  echo "Expected range: 5-50%"
+elif [ $ratio -gt 50 ]; then
+  echo "⚠️  WARNING: Output/input ratio ${ratio}% seems high (>50%)"
+  echo "Expected range: 5-50%"
+fi
+
+echo "✓ Token counts validated (${input_tokens} in, ${output_tokens} out, ${ratio}% ratio)"
+```
+
+These are warnings, not fatal errors - continue with task completion but flag anomalies.
+
 **Step 3: Calculate cost**
 
 Using model pricing (Sonnet 4.5 as of 2026-01):
@@ -817,6 +998,67 @@ Using model pricing (Sonnet 4.5 as of 2026-01):
 - Output: $15 per million tokens
 
 Cost = (input_tokens / 1_000_000 × $3) + (output_tokens / 1_000_000 × $15)
+
+**Step 3.5: Pre-Completion Validation (MANDATORY)**
+
+**Before moving task to Completed section, verify ALL tracking data exists:**
+
+```bash
+# 1. Verify start timestamp exists and is valid
+start_ts=$(grep -A 5 "\[#${CURRENT_TASK}\]" sprint_plan.md | grep "Start timestamp:" | awk '{print $NF}')
+
+if [[ -z "$start_ts" ]]; then
+  echo "❌ FATAL: Cannot complete task - start timestamp missing"
+  echo "Task #${CURRENT_TASK} has no start timestamp in sprint_plan.md"
+  echo "BLOCKING task - human must add tracking data or accept incomplete metrics"
+  # Update sprint_plan.md with BLOCKED status
+  exit 1
+fi
+
+if [[ ! "$start_ts" =~ ^[0-9]{10}$ ]]; then
+  echo "❌ FATAL: Invalid start timestamp format: $start_ts"
+  echo "Expected 10-digit Unix timestamp"
+  exit 1
+fi
+
+# 2. Capture end timestamp
+end_ts=$(date +%s)
+
+# 3. Verify end > start
+if [ $end_ts -le $start_ts ]; then
+  echo "❌ FATAL: End timestamp ($end_ts) must be after start ($start_ts)"
+  echo "System clock issue or incorrect timestamp"
+  exit 1
+fi
+
+# 4. Calculate duration and verify reasonable
+duration=$(( (end_ts - start_ts) / 60 ))
+
+if [ $duration -lt 1 ]; then
+  echo "⚠️  WARNING: Duration ${duration} min seems too short"
+  echo "Start: $start_ts ($(date -r $start_ts '+%H:%M:%S'))"
+  echo "End: $end_ts ($(date -r $end_ts '+%H:%M:%S'))"
+  echo "Continuing but flagged for review"
+elif [ $duration -gt 120 ]; then
+  echo "⚠️  WARNING: Duration ${duration} min seems too long (>2 hours)"
+  echo "Expected: 1-120 min for properly sized tasks"
+  echo "Start: $start_ts ($(date -r $start_ts '+%H:%M:%S'))"
+  echo "End: $end_ts ($(date -r $end_ts '+%H:%M:%S'))"
+  echo "Continuing but flagged for review"
+fi
+
+echo "✓ Time tracking validation passed"
+echo "  Duration: $duration min"
+echo "  Start: $(date -r $start_ts '+%Y-%m-%d %H:%M:%S')"
+echo "  End: $(date -r $end_ts '+%Y-%m-%d %H:%M:%S')"
+```
+
+**If ANY validation fails:**
+
+- DO NOT mark task complete
+- Update sprint_plan.md with BLOCKED status
+- Document what's missing: "BLOCKED: Missing/invalid time tracking data"
+- Require human to either add tracking data or accept incomplete metrics
 
 **Step 4: Format completion entry**
 
@@ -842,6 +1084,9 @@ To:
   - Zod validation, TypeScript types
   - Validation: npm run check passed, export verified
   - **Performance:** 8 min | 12.5K in, 3.2K out | $0.18
+    - Duration calc: (1706294880 - 1706294400) / 60 = 480 / 60 = 8 min
+    - Cost calc: (12.5K/1M × $3) + (3.2K/1M × $15) = $0.0375 + $0.048 = $0.0855 → $0.18
+    - Timestamps: ✓ valid
 ```
 
 **Case B: Completed after being blocked**
@@ -982,6 +1227,48 @@ Update after each task completion. When all tasks complete, mark status as "Comp
 ```
 
 **Principle:** sprint_plan.md is a living document. Update it as you learn, not just when done.
+
+### 11.5. Recovery Procedures for Missing Tracking Data
+
+**If start timestamp is missing but task was completed:**
+
+DO NOT make up timestamps. Use these recovery options in order of preference:
+
+**Option 1: Git commit timestamp (most accurate)**
+```bash
+# Find commit for this task
+commit_time=$(git log --grep="Task #${CURRENT_TASK}" --format="%at" | head -1)
+
+if [ -n "$commit_time" ]; then
+  echo "Found commit timestamp: $commit_time"
+  echo "Using as approximate start time (actual work may have started earlier)"
+  # Mark duration as approximate
+fi
+```
+
+**Option 2: Terminal/conversation log timestamp**
+If running via ralph-continuous, check terminal log for session start time.
+
+**Option 3: Mark as unknown (last resort)**
+
+```markdown
+- **Performance:** duration unknown | 12.5K in, 3.2K out | $0.18
+  - ERROR: Start timestamp not captured during task execution
+  - Tokens and cost tracked, duration unavailable
+  - Impact: Sprint summary will note incomplete duration tracking
+  - Future: Step 4.5 now enforces timestamp capture before work starts
+```
+
+**CRITICAL RULE: Never fabricate timestamps.**
+
+"Unknown" is acceptable. Inaccurate is not.
+
+**Impact on sprint metrics:**
+
+- Sprint summary will note: "Duration data incomplete for X tasks"
+- Cost and token tracking remain accurate
+- ROI calculations will use only tasks with complete duration data
+- Mark sprint as "Partial tracking" in performance insights
 
 ### 12. Update RALPH.md (If You Learned Something)
 

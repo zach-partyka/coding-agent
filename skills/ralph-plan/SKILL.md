@@ -112,6 +112,42 @@ Based on their focus, ask follow-up questions **one at a time**:
 - "What areas need cleanup?"
 - "Any specific patterns to follow?"
 
+### 5.5. Suggest Investigation Tasks (For Certain Sprint Types)
+
+**Before asking about investigation needs, check if sprint involves:**
+
+Keywords triggering investigation-first approach:
+- "standardize" → audit current patterns first
+- "refactor" → understand existing structure first
+- "optimize" → profile/measure first
+- "migration" → survey data patterns first
+- "consistency" → document inconsistencies first
+- "align" → compare implementations first
+
+**If keywords detected, prompt user:**
+
+Use `AskUserQuestion`:
+```json
+{
+  "questions": [{
+    "question": "I notice this sprint involves [keyword]. Investigation-first approach in Sprint 10 achieved 305x ROI by documenting inconsistencies before implementation (3 audit tasks → 12 implementation tasks averaging 3 min each vs. typical 10-15 min). Would you like me to add 1-2 investigation/audit tasks at the start of the sprint to document current state before implementation?",
+    "header": "Investigation-First Approach",
+    "options": [
+      {"label": "Yes - Add investigation tasks first (Recommended)", "description": "Document current state before implementing changes"},
+      {"label": "No - Proceed with implementation tasks only", "description": "Skip investigation and go straight to implementation"}
+    ],
+    "multiSelect": false
+  }]
+}
+```
+
+**If user selects "Yes":**
+
+- Add 1-2 investigation tasks to sprint plan (marked High Priority)
+- Format: "Audit [X] patterns across codebase" or "Document current [Y] implementation approaches"
+- Timebox: ~10 min per investigation task
+- Expected output: Document findings in task description or create summary in sprint_plan.md Notes section
+
 ### 6. Identify Investigation Tasks
 
 Some items may need investigation before implementation. Ask:
@@ -144,13 +180,88 @@ Ask about sprint size:
     "question": "How big should this sprint be?",
     "header": "Sprint Size",
     "options": [
-      {"label": "Small (3-5 tasks)", "description": "Quick iteration, low risk"},
-      {"label": "Medium (5-8 tasks)", "description": "Balanced sprint"},
-      {"label": "Large (8-12 tasks)", "description": "Ambitious, more context resets"}
+      {"label": "Focused (5-8 tasks)", "description": "Clear goal, easy to review"},
+      {"label": "Standard (9-14 tasks)", "description": "Balanced sprint, your typical size"},
+      {"label": "Ambitious (15-20 tasks)", "description": "Large scope, ensure tasks are atomic"}
     ],
     "multiSelect": false
   }]
 }
+```
+
+**If user selects "Ambitious (15-20 tasks)":**
+
+Show warning with guidance:
+
+```
+⚠️ Ambitious sprint! To keep this manageable:
+
+- Ensure each task is 1-2 SP (completable in 10-20 min)
+- Group related tasks conceptually (e.g., 3 investigation, 10 implementation, 3 testing)
+- Consider if this could be split into Sprint N and Sprint N+1
+
+Based on your sprint history (Sprint 10), 15-20 task sprints work when:
+
+- Investigation-first approach with clear atomic implementation steps
+- Each implementation task averages 5-8 min (proven in Sprint 10: 305x ROI)
+
+Proceed with [X] tasks?
+```
+
+Use `AskUserQuestion`:
+```json
+{
+  "questions": [{
+    "question": "Proceed with ambitious sprint?",
+    "header": "Confirm Sprint Size",
+    "options": [
+      {"label": "Yes, proceed with [X] tasks", "description": "Tasks are atomic and well-defined"},
+      {"label": "No, split into two sprints", "description": "Break into Sprint N and Sprint N+1"}
+    ],
+    "multiSelect": false
+  }]
+}
+```
+
+### 7.5. Order Tasks Explicitly by Priority and Dependencies
+
+After gathering all tasks, order them explicitly so Ralph executes top-to-bottom:
+
+**Ask clarifying questions:**
+1. "Which tasks are blockers for others?" (dependencies)
+2. "Which tasks are highest business value?" (priority)
+3. "Which tasks need to happen first for technical reasons?" (architecture)
+
+**Document the ordering in sprint_plan.md:**
+```markdown
+## Critical Path (must complete in order)
+1. [#1] Set up database schema - BLOCKER for all data tasks
+2. [#2] Add user model - depends on #1
+3. [#3] Create login endpoint - depends on #2
+
+## High Priority (can parallelize if no dependencies)
+4. [#4] Add dashboard UI - independent
+5. [#5] Add error logging - independent
+```
+
+**Tell the user:**
+"I've ordered tasks by dependencies and priority. Ralph will execute top-to-bottom within each section."
+
+**If investigation discovers priority conflicts:**
+
+Ralph will flag conflicts during execution:
+
+```
+⚠️ Investigation finding - Priority conflict detected
+
+Task #3 investigation revealed:
+- Task #7 should happen before Task #5
+- Reason: [explanation]
+
+Options:
+1. BLOCK - Update sprint_plan.md order and I'll proceed
+2. Continue as-is - Keep original order
+3. Mark #7 as blocker for #5 - I'll skip #5 until #7 is done
 ```
 
 ### 8. Generate sprint_plan.md
@@ -222,6 +333,53 @@ Show the draft plan and ask:
 5. **Keep tasks small** - Each task should be completable in one Claude session (~10-20 min).
 
 6. **Acceptance criteria matter** - Every task needs clear "done" definition.
+
+## Task Sizing Guidelines
+
+**Every task must complete within a single Claude session:**
+
+### Technical Constraint
+- Sonnet 4.5 has ~200k token context window
+- Session duration: ~10-20 minutes of complex work before context reset
+- What fits: Investigate OR Build OR Test for 1 feature (not all three combined)
+
+### Story Point Guide (Agile Framework)
+
+**1 SP (5-10 min):**
+- Single file change with clear pattern to follow
+- UI changes with clear specs
+- Simple API endpoints following existing patterns
+- Configuration changes
+
+**2 SP (10-20 min):**
+- Multi-file changes with moderate complexity
+- New patterns or infrastructure
+- Investigation tasks (timeboxed to 10-15 min)
+- Testing tasks
+
+**3+ SP = TOO BIG (split into multiple tasks):**
+- If estimate exceeds 20 min, break into multiple tasks
+- Context window constraint: ~200k tokens ≈ 20 min complex work
+
+### Investigation-Only Tasks
+
+Investigation tasks should be investigation ONLY:
+- Timebox: 10-15 min max
+- Output: Document findings, don't implement
+- Follow-up: Findings inform subsequent implementation tasks
+
+**Sprint 10 example:** 3 investigation tasks (10 min each) → 12 implementation tasks (6.3 min avg) = 305x ROI
+
+### Examples
+
+**Good task sizing:**
+- "Audit badge usage patterns across codebase" (Investigation, 10 min)
+- "Update dashboard to use unified completion calculation" (Implementation, 5 min)
+- "Add Playwright test for chat flow" (Testing, 13 min)
+
+**Too large (needs splitting):**
+- "Build authentication system" → Split into: investigate auth options, add user model, implement login endpoint, add JWT, add middleware
+- "Refactor API layer" → Split into: audit current patterns, update endpoint 1, update endpoint 2, etc.
 
 ## Example Conversation Flow
 

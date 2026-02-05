@@ -447,7 +447,186 @@ If no updates needed:
 RALPH.md: No new learnings to add (current instructions still accurate)
 ```
 
-### 12. Report Completion
+### 12. Generate Performance Insights (If 5+ Sprints)
+
+**After updating sprint_history.md, check sprint count:**
+
+```bash
+sprint_count=$(ls -d sprints/sprint-* 2>/dev/null | wc -l)
+```
+
+**If sprint_count >= 5 AND sprints_since_last_report >= 3:**
+
+Parse all sprint_summary.md files and extract:
+
+- Sprint size (task count)
+- Duration per sprint, per task
+- Cost per sprint, per task
+- Investigation-first sprints vs non-investigation
+- Blocker counts
+- ROI metrics
+
+**Generate inline performance insights:**
+
+Show user recommendations first, then supporting data:
+
+```
+=== Sprint Archived ===
+
+Sprint #[N]: [Theme]
+Duration: [start] - [end]
+Performance: [X] tasks, [Y] min, $[Z], [ROI]x ROI
+
+Archived to: sprints/sprint-[N]-[theme]/
+
+---
+
+📊 PERFORMANCE INSIGHTS ([N] Sprints Analyzed)
+
+**Recommendations Based on Your Data:**
+1. [Recommendation 1 based on patterns]
+2. [Recommendation 2 based on patterns]
+3. [Recommendation 3 based on patterns]
+
+**Supporting Data:**
+
+**Sprint Size Patterns:**
+• Average: [X] tasks per sprint
+• Most common: [range] tasks ([X]% of sprints)
+• Your largest: Sprint [N] ([X] tasks), Sprint [M] ([Y] tasks)
+
+**Task Duration Trends:**
+• Investigation tasks: [X] min (consistent, timeboxed)
+• Implementation tasks: [X] min when investigation-first, [Y] min otherwise
+• Testing tasks: [X] min average
+
+**Investigation-First Impact:**
+• Sprints with investigation tasks: [X] blockers avg (Sprint [list])
+• Sprints without investigation: [Y] blockers avg (Sprint [list])
+• ROI difference: [X]x vs [Y]x
+
+**Cost Performance:**
+• Average: $[X]/sprint, $[Y]/task
+• ROI range: [X]x-[Y]x vs engineer baseline
+• Most efficient: Sprint [N] (investigation-first)
+
+📄 Full report saved to: sprints/performance_insights.md
+
+Would you like me to update RALPH.md with these patterns?
+```
+
+**Use `AskUserQuestion`:**
+
+```json
+{
+  "questions": [{
+    "question": "Update RALPH.md with performance patterns?",
+    "header": "Performance Insights",
+    "options": [
+      {"label": "Yes - Update with recommendations I see", "description": "Add investigation-first, sprint sizing patterns"},
+      {"label": "Let me specify what to add", "description": "I'll tell you which patterns to codify"},
+      {"label": "Just save the report", "description": "Review sprints/performance_insights.md later"},
+      {"label": "Skip entirely", "description": "Not ready to codify yet"}
+    ],
+    "multiSelect": false
+  }]
+}
+```
+
+**Generate detailed report file:**
+
+Write to `sprints/performance_insights.md`:
+
+```markdown
+# Sprint Performance Insights
+
+**Generated:** [date]
+**Data:** Sprints 1-[N] ([N] sprints analyzed)
+
+## Overview
+
+| Metric | Value |
+|--------|-------|
+| Total sprints analyzed | [N] |
+| Total tasks completed | [X] |
+| Total time | ~[X] hours |
+| Total cost | ~$[X] |
+| Average ROI | [X]x vs engineer baseline |
+
+## Sprint Size Analysis
+
+### Distribution
+- **5-8 tasks:** [X] sprints ([X]%)
+  - Sprints: [list]
+  - Average duration: [X] min
+  - Average cost: $[X]
+
+[... detailed breakdown by size ranges ...]
+
+## Investigation-First Impact
+
+### Sprints WITH Investigation Tasks
+
+| Sprint | Tasks | Blockers | ROI | Notes |
+|--------|-------|----------|-----|-------|
+| [N] | [X] | [Y] | [Z]x | [notes] |
+
+[... detailed comparison table ...]
+
+## Task Type Breakdown
+
+| Task Type | Avg Duration | Sample Size | Notes |
+|-----------|--------------|-------------|-------|
+| Investigation | [X] min | [n] tasks | Timeboxed |
+| Implementation (clear) | [X] min | [n] tasks | Investigation-first |
+| Implementation (unclear) | [X] min | [n] tasks | No investigation |
+[... etc ...]
+
+## Recommendations for Sprint Planning
+
+1. [Detailed recommendation 1]
+2. [Detailed recommendation 2]
+3. [Detailed recommendation 3]
+
+[... comprehensive analysis ...]
+```
+
+**If user chooses "Yes - Update with recommendations":**
+
+Add to RALPH.md:
+
+```markdown
+## Sprint Planning Patterns (From [N] Sprints)
+
+**Investigation-First Advantage:**
+- Sprints with investigation tasks have [X]% fewer blockers
+- Implementation tasks [X]% faster when investigation-first
+
+**Optimal Sprint Size:**
+- 8-12 tasks for balanced sprints
+- 15-20 tasks works for investigation-first approach
+
+**Task Sizing:**
+- Investigation: 10 min (timeboxed)
+- Implementation: 5-8 min (clear specs), 10-15 min (unclear)
+- Testing: 13 min avg
+
+Based on [N] completed sprints as of [date].
+```
+
+**If user chooses "Let me specify":**
+
+Ask user which patterns they want to add and add only those.
+
+**If user chooses "Just save the report" or "Skip":**
+
+No RALPH.md updates, just save performance_insights.md.
+
+**Update trigger file:**
+
+Create/update `.ralph/last_insights_sprint` with current sprint number to track when last report was generated.
+
+### 14. Report Completion
 
 ```
 === Sprint Archived ===
@@ -480,7 +659,7 @@ Ready to start next sprint!
 Run /ralph-plan to generate plan, or add tasks to sprint_plan.md manually.
 ```
 
-### 13. STOP
+### 15. STOP
 
 Archiving is complete. User can now start planning next sprint.
 
