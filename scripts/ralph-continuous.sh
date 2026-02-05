@@ -425,7 +425,7 @@ while true; do
       echo ""
       echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
       echo -e "${YELLOW}  Sprint Blocked: ${SPRINT_NAME}${NC}"
-      echo -e "${YELLOW}  Project: ${PROJECT_NAME}${NC}"
+      echo -e "\033[2m  ${PROJECT_NAME}${NC}"
       echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
       echo ""
       echo "All remaining tasks are blocked."
@@ -450,7 +450,7 @@ while true; do
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}  All tasks complete: ${SPRINT_NAME}${NC}"
-    echo -e "${GREEN}  Project: ${PROJECT_NAME}${NC}"
+    echo -e "\033[2m  ${PROJECT_NAME}${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
     log "All tasks complete: $SPRINT_NAME after $TASK_COUNT iterations"
 
