@@ -111,26 +111,37 @@ check_tasks_remain() {
     return 0  # Found unchecked tasks
   fi
 
-  # Check for numbered tasks not in Completed section
+  # Check for numbered tasks not in Completed section AND not BLOCKED
   if grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\].*" "$FIX_PLAN" 2>/dev/null; then
     local completed_line=$(grep -n "^## Completed" "$FIX_PLAN" | head -1 | cut -d: -f1)
+    local blocked_line=$(grep -n "^## Blocked" "$FIX_PLAN" | head -1 | cut -d: -f1)
+    
+    # Check for unblocked, uncompleted tasks
     if [ -z "$completed_line" ]; then
-      return 0
-    fi
-    if head -n "$completed_line" "$FIX_PLAN" | grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\]"; then
-      return 0
+      # No completed section yet, check for non-blocked tasks
+      if grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\].*" "$FIX_PLAN" | grep -vE "BLOCKED"; then
+        return 0
+      fi
+    else
+      # Check tasks before Completed section that aren't blocked
+      if head -n "$completed_line" "$FIX_PLAN" | grep -E "^\s*[0-9]+\.\s*\[#[0-9]+\]" | grep -qvE "BLOCKED"; then
+        return 0
+      fi
     fi
   fi
 
-  # Check for any line with "IN PROGRESS" (active tasks)
+  # Check for any line with "IN PROGRESS" (active tasks) but not BLOCKED
   if grep -qiE "IN PROGRESS" "$FIX_PLAN" 2>/dev/null; then
-    # But not if it's in the Completed section
+    # But not if it's in the Completed section or marked as BLOCKED
     local completed_line=$(grep -n "^## Completed" "$FIX_PLAN" | head -1 | cut -d: -f1)
     if [ -z "$completed_line" ]; then
-      return 0
-    fi
-    if head -n "$completed_line" "$FIX_PLAN" | grep -qiE "IN PROGRESS"; then
-      return 0
+      if head -n 999999 "$FIX_PLAN" | grep -iE "IN PROGRESS" | grep -qvE "BLOCKED"; then
+        return 0
+      fi
+    else
+      if head -n "$completed_line" "$FIX_PLAN" | grep -iE "IN PROGRESS" | grep -qvE "BLOCKED"; then
+        return 0
+      fi
     fi
   fi
 
@@ -408,13 +419,17 @@ while true; do
   if check_blocked; then
     echo ""
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Task blocked - human intervention needed${NC}"
+    echo -e "${YELLOW}  Task blocked - skipping to next unblocked task${NC}"
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo "Check sprint_plan.md for BLOCKED status and resolve."
-    echo "Then run ./ralph-continuous.sh again to resume."
-    log "Stopped: task blocked after $TASK_COUNT iterations"
-    break
+    echo "Blocked task detected in sprint_plan.md"
+    echo "Ralph will skip blocked tasks and continue with unblocked ones."
+    echo ""
+    log "Task blocked after $TASK_COUNT iterations - continuing with next unblocked task"
+    
+    # Don't stop - continue to next unblocked task
+    # Ralph skill will skip blocked tasks when selecting next task
+    sleep 2
   fi
 
   TASK_COUNT=$((TASK_COUNT + 1))

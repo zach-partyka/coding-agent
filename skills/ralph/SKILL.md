@@ -84,11 +84,25 @@ Continuing but implementation may not follow patterns/requirements correctly.
 
 From sprint_plan.md, pick ONE item to implement.
 
-**Selection logic:**
-1. First uncompleted item in "Critical Path" section
-2. If Critical Path complete, first item in "High Priority"
-3. If High Priority complete, first item in "Medium Priority"
-4. If Medium Priority complete, first item in "Low Priority"
+**CRITICAL: Skip blocked tasks**
+
+Before selecting, check for tasks marked BLOCKED:
+```bash
+# Check if task is blocked
+grep -E "^\s*[0-9]+\.\s*\[#[0-9]+\].*-\s*BLOCKED" sprint_plan.md
+```
+
+**Selection logic (skip blocked tasks):**
+1. First **unblocked** item in "Critical Path" section
+2. If Critical Path complete (or all blocked), first **unblocked** item in "High Priority"
+3. If High Priority complete (or all blocked), first **unblocked** item in "Medium Priority"
+4. If Medium Priority complete (or all blocked), first **unblocked** item in "Low Priority"
+5. If ALL tasks are blocked or complete, stop
+
+**If task is blocked:**
+- Skip it
+- Log: "Task #X blocked - skipping"
+- Select next unblocked task
 
 **Announce choice:**
 ```
@@ -99,6 +113,8 @@ Selected from sprint_plan.md:
 
 Category: Critical Path
 Why: Blocks validation layer and all downstream features
+
+Note: Skipped 2 blocked tasks (#5, #7)
 ```
 
 ### 4.5 Clock In - Capture Start Timestamp (MANDATORY)
