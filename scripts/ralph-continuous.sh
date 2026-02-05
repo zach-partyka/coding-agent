@@ -105,10 +105,15 @@ check_tasks_remain() {
   if [ -f "$MARKER_DIR/sprint-complete" ]; then
     return 1  # No tasks remain
   fi
+  
+  # Check for sprint-level BLOCKED status (all remaining work blocked)
+  if grep -qE "^\*\*Sprint Status:\*\*\s*BLOCKED" "$FIX_PLAN" 2>/dev/null; then
+    return 1  # Sprint blocked - no unblocked tasks remain
+  fi
 
-  # Check for unchecked task boxes: - [ ] **#N** or - [ ] #N or - [ ] Task #N
-  if grep -qE "^\s*-\s*\[ \]" "$FIX_PLAN" 2>/dev/null; then
-    return 0  # Found unchecked tasks
+  # Check for unchecked task boxes that are NOT blocked: - [ ] **#N** ... 
+  if grep -E "^\s*-\s*\[ \]" "$FIX_PLAN" 2>/dev/null | grep -qvE "BLOCKED"; then
+    return 0  # Found unblocked unchecked tasks
   fi
 
   # Check for numbered tasks not in Completed section AND not BLOCKED
@@ -150,7 +155,16 @@ check_tasks_remain() {
 
 check_blocked() {
   if grep -qE "BLOCKED|blocked" "$FIX_PLAN" 2>/dev/null; then
+    # Check for numbered format: 1. [#7] Task - BLOCKED
     if grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\].*-\s*(BLOCKED|IN PROGRESS.*BLOCKED)" "$FIX_PLAN"; then
+      return 0
+    fi
+    # Check for checkbox format: - [ ] **#7** Task - BLOCKED
+    if grep -qE "^\s*-\s*\[\s*\]\s*\*\*#[0-9]+\*\*.*-\s*BLOCKED" "$FIX_PLAN"; then
+      return 0
+    fi
+    # Check for sprint-level blocking status
+    if grep -qE "^\*\*Sprint Status:\*\*\s*BLOCKED" "$FIX_PLAN"; then
       return 0
     fi
   fi
