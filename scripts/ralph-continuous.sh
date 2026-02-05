@@ -419,17 +419,24 @@ while true; do
   if check_blocked; then
     echo ""
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Task blocked - skipping to next unblocked task${NC}"
+    echo -e "${YELLOW}  Task blocked${NC}"
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo "Blocked task detected in sprint_plan.md"
-    echo "Ralph will skip blocked tasks and continue with unblocked ones."
-    echo ""
-    log "Task blocked after $TASK_COUNT iterations - continuing with next unblocked task"
+    log "Task blocked after $TASK_COUNT iterations"
     
-    # Don't stop - continue to next unblocked task
-    # Ralph skill will skip blocked tasks when selecting next task
-    sleep 2
+    # Check if there are any unblocked tasks remaining
+    if ! check_tasks_remain; then
+      echo "All remaining tasks are blocked or complete."
+      echo "Sprint paused - resolve blocked tasks and run Ralph again."
+      echo ""
+      log "All tasks blocked or complete - stopping"
+      break
+    else
+      echo "Blocked task detected - skipping to next unblocked task"
+      echo ""
+      log "Continuing with next unblocked task"
+      sleep 2
+    fi
   fi
 
   TASK_COUNT=$((TASK_COUNT + 1))
