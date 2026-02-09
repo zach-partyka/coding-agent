@@ -114,15 +114,24 @@ Based on their focus, ask follow-up questions **one at a time**:
 
 ### 5.5. Suggest Investigation Tasks (For Certain Sprint Types)
 
-**Before asking about investigation needs, check if sprint involves:**
+**Scan ALL sprint context for investigation triggers:**
 
-Keywords triggering investigation-first approach:
+Check these sources for keywords:
+1. User's description from Step 5 ("What feature do you want to build?" answers)
+2. Selected backlog items (titles and descriptions)
+3. Sprint theme/focus (if user provided one)
+4. Any technical constraints or requirements mentioned
+
+**Keywords triggering investigation-first approach:**
 - "standardize" → audit current patterns first
 - "refactor" → understand existing structure first
 - "optimize" → profile/measure first
 - "migration" → survey data patterns first
 - "consistency" → document inconsistencies first
 - "align" → compare implementations first
+- "API" / "integrate" / "external" → validate API response structure first (Sprint 12-13: Hightouch API parsing caught post-deploy = 27 min rework)
+- "database" / "schema" / "data model" → verify actual schema first
+- "deploy" / "config" / "credentials" → compare local .env vs deployment configs first
 
 **If keywords detected, prompt user:**
 
@@ -144,9 +153,38 @@ Use `AskUserQuestion`:
 **If user selects "Yes":**
 
 - Add 1-2 investigation tasks to sprint plan (marked High Priority)
-- Format: "Audit [X] patterns across codebase" or "Document current [Y] implementation approaches"
+- Format examples:
+  - Code patterns: "Audit [X] patterns across codebase" or "Document current [Y] implementation approaches"
+  - API integrations: "Validate [API name] response structure with curl" or "Document actual API fields vs. assumed schema"
+  - Data/deployment: "Compare local .env vs deployment configs" or "Verify database schema matches code assumptions"
 - Timebox: ~10 min per investigation task
 - Expected output: Document findings in task description or create summary in sprint_plan.md Notes section
+
+**Examples of keyword detection in practice:**
+
+✅ **User says:** "I want to integrate Stripe for payments"
+- Detected: "integrate" + "Stripe"
+- Prompt: "I notice this sprint involves API integration. Would you like to add investigation tasks?"
+- Suggested task: "Validate Stripe API response structure with curl"
+
+✅ **User says:** "Refactor the authentication flow to be more consistent"
+- Detected: "refactor" + "consistent"
+- Prompt: "I notice this sprint involves refactoring and consistency. Would you like to add investigation tasks?"
+- Suggested tasks: "Audit existing auth patterns across codebase", "Document current authentication flow"
+
+✅ **User says:** "Optimize the database queries for the dashboard"
+- Detected: "optimize" + "database"
+- Prompt: "I notice this sprint involves optimization and database work. Would you like to add investigation tasks?"
+- Suggested tasks: "Profile current query performance", "Verify database indexes match query patterns"
+
+✅ **Backlog item:** "Add Hightouch API integration"
+- Detected: "API" + "integration"
+- Prompt: Same investigation-first recommendation
+- Suggested task: "Validate Hightouch API response structure with curl"
+
+❌ **User says:** "Fix the login button styling"
+- No keywords detected
+- No investigation prompt (straightforward UI fix)
 
 ### 6. Identify Investigation Tasks
 

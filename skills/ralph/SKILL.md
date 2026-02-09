@@ -393,6 +393,8 @@ Search complete:
 - Can reuse validation pattern from stdlib/validation_patterns.md
 ```
 
+**Context discipline:** After search, write this "Search complete" summary. For all later steps (extend vs new, where to implement, blocking), use **only** this summary. Do not re-paste or re-quote full grep/find output in later reasoning or messages.
+
 **DO NOT PROCEED without searching first.**
 
 ### 5.5. Block Immediately On Ambiguity
@@ -775,6 +777,8 @@ npx playwright test --config=playwright.config.ts
    - Human must investigate
 
 **Principle:** Code isn't done until it works in staging. "It worked locally" is not acceptable.
+
+**Context discipline:** After every test run (pass or fail), write a short **test summary** (e.g. "12 passed, 0 failed" or "10 passed, 2 failed: [test name]: [one-line reason]"). Use **only** this summary for pass/fail and fix decisions. Do not re-paste the full test log in the next reasoning or message.
 
 ### 10.75. Rollback on Catastrophic Test Failures
 
@@ -1535,6 +1539,8 @@ Before continuing:
 ### Search Before Implementing
 
 **Always search codebase thoroughly before writing new code.**
+
+**Keep context lean:** Reason from summaries (search results, test results), not from raw tool output. Write a short summary after search and after test runs; use only that summary for the next decision.
 
 Use 500 parallel subagents if needed. Common patterns:
 - File name search

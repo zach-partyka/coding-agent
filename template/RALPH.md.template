@@ -121,6 +121,101 @@ grep -A 5 "^- \[x\].*$(date +%Y-%m-%d)" sprint_plan.md | grep "calculated:"
 
 **Why this matters:** ROI demonstration requires accurate metrics. Engineer baseline: $50-75/hr × 6-8 hours = $300-600. Ralph must track precisely to show >95% cost reduction.
 
+## Sprint Planning Patterns
+
+Patterns for effective sprint planning with Ralph. Based on analysis of 13+ sprints across projects.
+
+### Investigation-First Approach (Highest ROI)
+
+**When to use:** External APIs, unfamiliar code areas, cross-component patterns
+
+**Impact from data:**
+- Sprints WITH investigation: 0 blockers, 116x ROI, 100% first-pass success
+- Sprints WITHOUT investigation: 2 blockers, 6.8x ROI, 74% first-pass success
+
+**How to apply:**
+1. Start sprint with 2-3 investigation tasks (~10 min each, timeboxed)
+2. Document findings in "Learnings" section
+3. Reference findings in implementation tasks
+
+**Example investigation tasks:**
+- "Validate [API name] response structure with curl"
+- "Audit existing [pattern] across 3+ components"
+- "Compare local .env vs deployment configs"
+- "Verify database schema matches code assumptions"
+
+**Note:** `/ralph-plan` auto-detects when investigation is needed based on keywords like "API", "integrate", "external", "standardize", "refactor", "optimize".
+
+---
+
+### Sprint Sizing Guidelines
+
+**3-5 tasks (20-30 min):** Bug fixes, focused features, single-file changes
+- ROI: 20-40x
+- Use for: Quick fixes, isolated features
+
+**8-12 tasks (60-90 min):** Feature development with investigation
+- ROI: 10-20x (sweet spot)
+- Use for: Most feature work, includes investigation phase
+
+**15-18 tasks (120-150 min):** Major features (investigation-first required)
+- ROI: 4-8x
+- Use for: Large features with comprehensive testing
+
+**Rule of thumb:** If sprint >12 tasks without investigation phase, split into 2 sprints or add investigation tasks.
+
+---
+
+### API/External Integration Validation Checklist
+
+**Before writing integration code:**
+
+1. **Investigation task (~5-10 min):**
+   ```bash
+   # Validate API structure with curl
+   curl -H "Authorization: Bearer $API_KEY" https://api.example.com/endpoint | jq '.'
+
+   # Document: field names, nesting, optional vs required fields
+   ```
+
+2. **Document findings in sprint_plan.md:**
+   ```markdown
+   - [x] **#1** Investigation: [API name] response structure - 10 min
+     - Finding: Returns nested `data.items` not flat `items`
+     - Action: Write TypeScript interface matching actual structure
+   ```
+
+3. **Implement against validated structure:**
+   ```markdown
+   - [ ] **#2** Update [Service] to match API structure - 10 min
+     - Uses finding from #1 (nested structure documented)
+   ```
+
+**Why this matters:** Prevents expensive rework from discovering API structure mismatches post-deploy.
+
+---
+
+### Test Debt Zero-Tolerance
+
+**Pattern:** Fix or skip broken tests in same sprint they appear.
+
+**Don't accumulate test debt:**
+- Masks new failures
+- Reduces CI/CD confidence
+- Creates expensive future cleanup sprints
+
+**Definition of Done (Every Sprint):**
+1. All tests that existed at sprint start still pass (or explicitly skipped)
+2. No new failing tests introduced
+3. Type checking passes
+
+**If tests fail:**
+- **Fix:** Update test to match current implementation (same sprint)
+- **Skip:** Add `.skip` if feature not in scope (document why)
+- **Don't ignore:** Accumulated debt = expensive cleanup
+
+---
+
 ## Learned Lessons
 
 [Add lessons as Ralph makes mistakes or you discover better patterns]
