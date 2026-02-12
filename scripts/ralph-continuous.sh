@@ -10,10 +10,12 @@
 # interactive UI (diffs, colors, reasoning). The orchestrator waits for each
 # task to complete before spawning the next.
 
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
 # Configuration
 RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
+RALPH_MODEL=""  # Model selection (set via prompt or RALPH_MODEL env var)
 
 # Check for --inline flag (forces inline mode, no external terminal spawning)
 FORCE_INLINE=false
@@ -24,11 +26,11 @@ for arg in "$@"; do
 done
 
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m' # No Color
 
 # Get project directory (filter out --inline flag)
 PROJECT_ARG=""
@@ -87,9 +89,9 @@ else
   PROJECT_DIR="$PROJECT_ARG"
 fi
 
-FIX_PLAN="$PROJECT_DIR/sprint_plan.md"
-LOG_FILE="$PROJECT_DIR/ralph-continuous.log"
-MARKER_DIR="$PROJECT_DIR/.ralph-markers"
+readonly FIX_PLAN="${PROJECT_DIR}/sprint_plan.md"
+readonly LOG_FILE="${PROJECT_DIR}/ralph-continuous.log"
+readonly MARKER_DIR="${PROJECT_DIR}/.ralph-markers"
 
 # Create marker directory
 mkdir -p "$MARKER_DIR"
@@ -197,21 +199,29 @@ spawn_in_terminal() {
   local task_num=$1
 
   # Capture task start timestamp (shell-enforced)
-  local task_start_ts=$(date +%s)
-  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+  local task_start_ts
+  task_start_ts=$(date +%s)
+  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
 
   # Get wrapper script path
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="$script_dir/ralph-task-wrapper.sh"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="${script_dir}/ralph-task-wrapper.sh"
 
-  # Simple command that calls wrapper script
-  local cmd="'$wrapper' '$task_num' '$PROJECT_DIR' '$task_start_ts' '$MARKER_DIR'"
+  # Create minimal launcher in /tmp to hide verbose command from terminal
+  local launcher="/tmp/ralph-task-${task_num}.sh"
+  cat > "$launcher" << LAUNCHER
+#!/bin/bash
+rm -f "$launcher"
+exec "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+LAUNCHER
+  chmod +x "$launcher"
 
-  # 'do script' without 'in window' opens a new window - no accessibility permissions needed
+  # 'do script' without 'in window' opens a new window
   osascript <<EOF
 tell application "Terminal"
   activate
-  do script "$cmd"
+  do script "$launcher"
 end tell
 EOF
 }
@@ -222,30 +232,49 @@ spawn_in_iterm() {
   local task_num=$1
 
   # Capture task start timestamp (shell-enforced)
-  local task_start_ts=$(date +%s)
-  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+  local task_start_ts
+  task_start_ts=$(date +%s)
+  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
 
   # Get wrapper script path
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="$script_dir/ralph-task-wrapper.sh"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="${script_dir}/ralph-task-wrapper.sh"
 
-  # Simple command that calls wrapper script
-  local cmd="'$wrapper' '$task_num' '$PROJECT_DIR' '$task_start_ts' '$MARKER_DIR'"
+  # Create minimal launcher (clean terminal output)
+  local launcher="/tmp/ralph-task-${task_num}.sh"
+  cat > "$launcher" <<EOF
+#!/bin/bash
+set -euo pipefail
+rm -f "$launcher"
 
-  # Use tabs in existing window, or create first window if none exists
+# Run wrapper (no extra startup chatter)
+"$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+WRAPPER_EXIT=\$?
+
+if [ \$WRAPPER_EXIT -ne 0 ]; then
+  echo "Ralph wrapper exited with code \$WRAPPER_EXIT"
+  echo "Press any key to close..."
+  read -n 1
+fi
+exit \$WRAPPER_EXIT
+EOF
+  chmod +x "$launcher"
+
+  # Use write text so tab stays open after script exits
   osascript <<EOF
 tell application "iTerm"
   activate
   if (count of windows) = 0 then
     create window with default profile
     tell current session of current window
-      write text "$cmd"
+      write text "$launcher"
     end tell
   else
     tell current window
       create tab with default profile
       tell current session
-        write text "$cmd"
+        write text "$launcher"
       end tell
     end tell
   end if
@@ -258,18 +287,26 @@ spawn_in_windows_terminal() {
   local task_num=$1
   
   # Capture task start timestamp (shell-enforced)
-  local task_start_ts=$(date +%s)
-  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+  local task_start_ts
+  task_start_ts=$(date +%s)
+  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
   
   # Get wrapper script path
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="$script_dir/ralph-task-wrapper.sh"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="${script_dir}/ralph-task-wrapper.sh"
 
-  # Simple command that calls wrapper script
-  local cmd="'$wrapper' '$task_num' '$PROJECT_DIR' '$task_start_ts' '$MARKER_DIR'"
+  # Create minimal launcher in /tmp to hide verbose command from terminal
+  local launcher="/tmp/ralph-task-${task_num}.sh"
+  cat > "$launcher" << LAUNCHER
+#!/bin/bash
+rm -f "$launcher"
+exec "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+LAUNCHER
+  chmod +x "$launcher"
 
   # Spawn tab - wt.exe will error if profile doesn't exist
-  if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$cmd" 2>/dev/null; then
+  if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$launcher" 2>/dev/null; then
     return 0
   else
     echo "⚠️  Failed to spawn Windows Terminal tab"
@@ -301,22 +338,24 @@ spawn_inline() {
   local task_num=$1
   
   # Capture task start timestamp (shell-enforced)
-  local task_start_ts=$(date +%s)
-  echo "$(date -r $task_start_ts '+%Y-%m-%d %H:%M:%S')" > "$MARKER_DIR/task-$task_num-start"
+  local task_start_ts
+  task_start_ts=$(date +%s)
+  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
   
   # Get wrapper script path
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="$script_dir/ralph-task-wrapper.sh"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local wrapper="${script_dir}/ralph-task-wrapper.sh"
   
-  # Call wrapper script directly
-  "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR"
+  # Call wrapper script directly (pass model as 5th arg)
+  "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
 }
 
 # Wait for task completion via marker file, then close the terminal
 wait_for_completion() {
   local task_num=$1
   local marker_file="$MARKER_DIR/task-done"
-  local timeout=600  # 10 minutes
+  local timeout=3600  # 60 minutes
   local elapsed=0
 
   # Remove old marker before starting
@@ -350,9 +389,9 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 TERMINAL_TYPE=$(detect_terminal)
-log "Starting Ralph Continuous (terminal type: $TERMINAL_TYPE)"
-log "Project: $PROJECT_DIR"
-log "Fix Plan: $FIX_PLAN"
+log "Starting Ralph Continuous (terminal type: ${TERMINAL_TYPE})"
+log "Project: ${PROJECT_DIR}"
+log "Fix Plan: ${FIX_PLAN}"
 
 # Load project configuration if it exists
 if [ -f "$PROJECT_DIR/ralph.config.sh" ]; then
@@ -392,6 +431,49 @@ elif [ "$TERMINAL_TYPE" = "vscode" ]; then
 fi
 
 echo -e "Terminal: ${GREEN}$TERMINAL_TYPE${NC}"
+echo ""
+
+# Model selection
+if [ -z "$RALPH_MODEL" ]; then
+  echo -e "${BLUE}Which model should Ralph use?${NC}"
+  echo ""
+  echo -e "  ${GREEN}1${NC}) Default (Sonnet 4.5) - \$3/\$15 per Mtok - good for most tasks"
+  echo -e "  ${GREEN}2${NC}) opus - Opus 4.6 - \$5/\$25 per Mtok - most capable"
+  echo -e "  ${GREEN}3${NC}) opus-1m - Opus 4.6 (1M context) - \$10/\$37.50 per Mtok"
+  echo -e "  ${GREEN}4${NC}) sonnet-1m - Sonnet 4.5 (1M context) - \$6/\$22.50 per Mtok"
+  echo -e "  ${GREEN}5${NC}) haiku - Haiku 4.5 - \$1/\$5 per Mtok - fastest"
+  echo ""
+  read -p "Select [1-5]: " model_selection
+  
+  case $model_selection in
+    1|"")
+      RALPH_MODEL=""
+      ;;
+    2)
+      RALPH_MODEL="opus"
+      ;;
+    3)
+      RALPH_MODEL="opus-1m"
+      ;;
+    4)
+      RALPH_MODEL="sonnet-1m"
+      ;;
+    5)
+      RALPH_MODEL="haiku"
+      ;;
+    *)
+      echo -e "${YELLOW}Invalid selection, using default model${NC}"
+      RALPH_MODEL=""
+      ;;
+  esac
+fi
+
+if [ -n "$RALPH_MODEL" ]; then
+  echo -e "Model: ${GREEN}$RALPH_MODEL${NC}"
+  export RALPH_MODEL
+else
+  echo -e "Model: ${GREEN}default${NC}"
+fi
 echo ""
 
 # Validate project structure

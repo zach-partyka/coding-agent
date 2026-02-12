@@ -14,623 +14,170 @@ Implement ONE thing from `sprint_plan.md`, then stop.
 - Want human review after each implementation
 - Prefer tight control over continuous execution
 
+## When Invoked from ralph-continuous
+
+If the user message includes **ONE TASK ONLY** or is from `ralph-continuous.sh`:
+- Implement **exactly one** unchecked task from sprint_plan.md (the first one).
+- Do **not** implement, mark complete, or touch any other task.
+- When done, **touch the claude-done marker** specified in the prompt (e.g., `touch /path/to/.ralph-markers/task-N-claude-done`).
+- If the entire sprint is complete (no unchecked tasks left), also touch the sprint-complete marker.
+- The next tab will handle the next task.
+
 ## Workflow
 
 ### 1. Get Project Directory
 
-**Check if directory was provided in the prompt first.**
+Check if directory was provided in the prompt first. If the user's message contains "Project directory:" followed by a path, use that path directly.
 
-If the user's message contains "Project directory:" followed by a path, use that path directly. This allows the skill to be called from scripts/automation.
-
-**If no directory provided, prompt:**
+If no directory provided, use `AskUserQuestion`:
 ```
 Which project directory should I work in?
 (Full path to repo with sprint_plan.md, specs/, stdlib/, RALPH.md)
-
-Example: /Users/zachpa/Documents/AI/marketing-copilot-coaching
 ```
 
-Use `AskUserQuestion` to collect path only if not already provided.
-
-### 2. Validate Directory Structure
-
-Use `ls` to check the project directory contents directly:
+### 2. Validate Directory
 
 ```bash
 ls -la [PROJECT_DIR]
 ```
 
-Verify these exist in the output:
-- ✅ `sprint_plan.md` (file) - need plan to follow
-- ✅ `specs` (directory) - defines WHAT to build
-- ✅ `stdlib` (directory) - defines HOW to build
-- ✅ `RALPH.md` (file) - build/test instructions
+Required (stop if missing):
+- `sprint_plan.md` — if missing, tell user to run `/ralph-plan`
+- `RALPH.md`
 
-**Do NOT use glob patterns** - they fail when directories exist but patterns don't match.
+Warn but continue if missing:
+- `specs/` directory
+- `stdlib/` directory
 
-**If sprint_plan.md missing:**
-```
-Error: sprint_plan.md not found
-
-Run /ralph-plan first to generate the plan.
-```
-
-**If specs/ or stdlib/ missing:**
-```
-Warning: [missing directory] not found
-Continuing but implementation may not follow patterns/requirements correctly.
-```
+Do NOT use glob patterns — they fail when directories exist but patterns don't match.
 
 ### 3. Study Context
 
-**A. Read sprint_plan.md:**
-- Identify items marked `[ ]` (not done)
-- Understand priorities (Critical → High → Medium → Low)
+Read these in parallel:
+- **sprint_plan.md** — identify unchecked `[ ]` items and priorities
+- **specs/** — what to build (requirements, constraints, success criteria)
+- **stdlib/** — how to build (coding patterns, conventions)
+- **RALPH.md** — build/run/test instructions
 
-**B. Read specs/:**
-- Understand WHAT to build
-- Requirements, constraints, success criteria
+### 4. Select Task
 
-**C. Read stdlib/:**
-- Understand HOW to build
-- Coding patterns, technical conventions
+Pick ONE unchecked item from sprint_plan.md. Skip any task marked BLOCKED.
 
-**D. Read RALPH.md:**
-- How to build/run the project
-- How to test
-- Validation commands
+Selection order:
+1. First unblocked item in "Critical Path"
+2. Then "High Priority"
+3. Then "Medium Priority"
+4. Then "Low Priority"
+5. If all blocked or complete, stop
 
-### 4. Choose Most Important Thing
+Announce your choice with the task, its category, and why it matters. Note any skipped blocked tasks.
 
-From sprint_plan.md, pick ONE item to implement.
+### 5. Clock In
 
-**CRITICAL: Skip blocked tasks**
-
-Before selecting, check for tasks marked BLOCKED:
-```bash
-# Check if task is blocked
-grep -E "^\s*[0-9]+\.\s*\[#[0-9]+\].*-\s*BLOCKED" sprint_plan.md
-```
-
-**Selection logic (skip blocked tasks):**
-1. First **unblocked** item in "Critical Path" section
-2. If Critical Path complete (or all blocked), first **unblocked** item in "High Priority"
-3. If High Priority complete (or all blocked), first **unblocked** item in "Medium Priority"
-4. If Medium Priority complete (or all blocked), first **unblocked** item in "Low Priority"
-5. If ALL tasks are blocked or complete, stop
-
-**If task is blocked:**
-- Skip it
-- Log: "Task #X blocked - skipping"
-- Select next unblocked task
-
-**Announce choice:**
-```
-=== Ralph Building Mode ===
-
-Selected from sprint_plan.md:
-[x] Brief → audience logic mapper (deterministic, no AI calls)
-
-Category: Critical Path
-Why: Blocks validation layer and all downstream features
-
-Note: Skipped 2 blocked tasks (#5, #7)
-```
-
-### 4.5 Clock In - Capture Start Timestamp (MANDATORY)
-
-**Step 1: Check if shell already captured timestamp**
-
-First, check if the user prompt contains a pre-captured timestamp from the shell script:
-
-```
-Look for: "Task start timestamp: [10-digit number] (shell-enforced)"
-```
-
-**If shell timestamp found (PREFERRED METHOD):**
-
-```bash
-# Extract timestamp from prompt
-start_ts=1706294400  # (extracted from "Task start timestamp: 1706294400")
-
-echo "✓ Using shell-enforced timestamp: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
-```
-
-**If NO shell timestamp in prompt (FALLBACK):**
-
-Capture manually (but warn this is less reliable):
-
-```bash
-start_ts=$(date +%s)
-
-# Verify timestamp is valid (10 digits, all numbers)
-if [[ ! "$start_ts" =~ ^[0-9]{10}$ ]]; then
-  echo "❌ ERROR: Failed to capture start timestamp. Got: $start_ts"
-  exit 1
-fi
-
-echo "⚠️  Manual timestamp capture: $start_ts ($(date -r $start_ts '+%Y-%m-%d %H:%M:%S'))"
-echo "   Note: Shell-enforced timestamps are more accurate"
-```
-
-**Step 2: Immediately update sprint_plan.md:**
+Mark the task IN PROGRESS in sprint_plan.md:
 
 ```markdown
-1. [#1] Brief → audience logic mapper - IN PROGRESS
-   - Start timestamp: 1706294400
-   - Started: 2026-01-26
-   - Blockers: none
+- [ ] **#4** Add globalTeardown to playwright.config.ts - IN PROGRESS
+  - Started: 2026-02-10
+  - Model: Sonnet 4.5 (default)
 ```
 
-**CRITICAL: DO NOT proceed to step 5 until:**
+Check the prompt for `"Ralph model: [value]"` — if present, note it.
 
-1. Timestamp is captured successfully (shell or manual)
-2. Timestamp is recorded in sprint_plan.md
-3. Verification confirms timestamp is valid
+Shell handles timestamp capture. You just mark the status.
 
-**Why shell-enforced is preferred:**
+### 6. Detect Investigation Sprints
 
-- ✅ Shell captures BEFORE Claude starts (includes startup time)
-- ✅ Shell calculates duration AFTER Claude exits (includes all work)
-- ✅ 100% reliable - no AI decisions involved
-- ✅ Captures true wall-clock time
+If the sprint theme or first tasks involve performance, bugs, slowness, latency, or debugging — start with investigation, not implementation.
 
-**What gets included in task duration:**
+**Why:** Sprint 2 proved this. "Investigate chat response slowness" (7 min) identified 3 root causes, informing 9 subsequent tasks with zero blockers.
 
-INCLUDED:
+Investigation tasks:
+- Document root causes, don't implement fixes
+- Time-box to 10-15 min
+- Update sprint_plan.md with findings and recommended fix order
 
-- ✓ Searching codebase for existing implementations
-- ✓ Reading specs and stdlib
-- ✓ Implementation work
-- ✓ Local validation (TypeScript compile)
-- ✓ Git workflow (commit, push, merge)
-- ✓ Waiting for staging deploy
-- ✓ Running Playwright tests
-- ✓ Fixing test failures
-- ✓ Updating sprint_plan.md
+Skip investigation for new features, clear specs, or continuation of previous sprint work.
 
-NOT INCLUDED:
+### 7. Search Codebase
 
-- ✗ Reading sprint_plan.md to choose next task (overhead)
-- ✗ Deciding which task to pick (overhead)
-- ✗ Validating directory structure (overhead)
-- ✗ Reading RALPH.md for project context (overhead)
+**Search before writing any new code.** This is the single biggest source of past failures — building new when existing code should be extended.
 
-**If timestamp capture fails:**
+Confirm task is marked IN PROGRESS, then search using parallel subagents:
 
-- DO NOT proceed with the task
-- Report error: "Cannot start task - timestamp capture failed"
-- Mark task as BLOCKED in sprint_plan.md
-- Exit and require human intervention
+**A. Existing implementations** — files with relevant names
 
-### 4.6 Sprint Type Detection - Investigation First
+**B. Related functions** — grep for function names, imports, exports
 
-**For performance or bug fix sprints, always start with investigation.**
+**C. Similar functionality** — check for partial implementations, utilities, Python files for API tasks
 
-**Why this matters:** Sprint 2 proved this pattern. Starting with "Investigate chat response slowness" (7 min) identified 3 root causes, which informed all 9 subsequent tasks. Result: zero blockers.
+**D. For UI changes — search ALL locations:**
 
-**Detection:**
-If sprint theme or first tasks involve:
-- Performance optimization
-- Bug fixes
-- "slowness", "latency", "errors"
-- Debugging existing behavior
+Sprint 3 Learning: Task #13 failed because subtext existed in 3 components but only 1 was fixed.
 
-**Then:**
-1. First task should be **investigation** (diagnose before implementing)
-2. Investigation task documents root causes, not fixes
-3. Subsequent tasks address specific root causes identified
+Before changing any UI text/label/component, grep the entire `client/` directory. Check `components/layout/`, `components/mobile/`, `pages/`. Report all instances found. Do not proceed until all are identified.
 
-**Investigation task format:**
-```markdown
-1. [#1] Investigate [problem] - IN PROGRESS
-   - Goal: Identify root causes, NOT implement fixes
-   - Output: List of specific issues with evidence
-   - Time-boxed: 10-15 min max
-```
+**E. If existing code found — decide:**
 
-**After investigation, update sprint_plan.md:**
-```markdown
-## Investigation Results (Task #1)
+- **Extend** when same domain, natural fit, same patterns
+- **Build new** when different domain, awkward refactoring, different stack
+- **Block** when genuinely ambiguous or significant architectural decision
 
-Root causes identified:
-1. [Cause A] - [evidence/data]
-2. [Cause B] - [evidence/data]
-3. [Cause C] - [evidence/data]
+**Write a "Search complete" summary.** Use only this summary for all later decisions — do not re-paste raw grep output.
 
-Recommended fix order: [A, C, B] (based on impact/effort)
-```
+### 8. Block on Ambiguity
 
-**Then proceed with implementation tasks that address specific root causes.**
+Stop and ask before implementing if:
+- Task requirements are vague
+- Need to guess IDs, formats, field names, API parameters
+- Found existing code that might handle this
+- Integration path unclear
+- Specs contradict each other or are incomplete
+- stdlib doesn't cover this pattern
 
-**Skip investigation when:**
-- Building new features from scratch (no existing behavior to analyze)
-- Clear specs with no ambiguity
-- Continuation of previous sprint's work
+**Integration checkpoint:** If you've built 2-3 isolated services without connecting them, stop. Check sprint_plan.md for Integration/Testing tasks. If none exist or the path is unclear, block and ask.
 
-### 5. Search Codebase - "Search Before Build" Rule
+How to block: update sprint_plan.md with BLOCKED status, document the specific questions, and exit.
 
-**BEFORE searching, verify you're clocked in:**
+### 9. Check Test Requirements
+
+Determine if Playwright tests are required before implementing.
+
+**Tests required for:** user-facing features, critical user flows, form changes, auth, external API integrations.
+
+**Tests optional for:** internal refactoring, CSS-only changes, documentation, backend-only with no UI impact.
+
+If required, task is not complete until:
+- Feature code implemented
+- `data-testid` added to relevant UI elements
+- Playwright test written (use AI test generator if available, otherwise follow patterns in existing `tests/*.spec.ts`)
+- Test covers happy path and error states
+- Test passes against staging
+
+If blocked on test writing, mark BLOCKED with reason.
+
+### 10. Implement
+
+Follow specs/ requirements and stdlib/ patterns. Full implementation or nothing — no placeholders, no TODOs. If specs say deterministic, no AI/DB calls. If stdlib says Zod, use Zod.
+
+### 11. Local Validation
 
 ```bash
-# Extract current task number from step 4 announcement
-CURRENT_TASK="[task number from step 4]"
-
-# Verify start timestamp exists in sprint_plan.md
-if ! grep -A 3 "\[#${CURRENT_TASK}\]" sprint_plan.md | grep -q "Start timestamp:"; then
-  echo "❌ FATAL ERROR: Cannot proceed - start timestamp not captured"
-  echo "You must clock in (step 4.5) before starting task work"
-  echo "Current task: #${CURRENT_TASK}"
-  exit 1
-fi
-
-echo "✓ Clock-in verified - proceeding with search"
-```
-
-**Then proceed with MANDATORY SEARCH STEPS:**
-
-**CRITICAL:** Before writing ANY new code, search thoroughly using parallel subagents.
-
-**Common mistakes:**
-- Assuming feature not implemented because you haven't seen it yet
-- Building new code when existing code should be extended
-- Missing existing utilities/patterns that solve the problem
-
-**MANDATORY SEARCH STEPS:**
-
-Use up to 500 parallel subagents to search for:
-
-**A. Existing implementations:**
-```bash
-find . -name "*mapper*" -o -name "*audience*" -o -name "*brief*"
-```
-
-**B. Related functions:**
-```bash
-grep -rn "mapBriefToAudience" .
-grep -rn "audienceLogic" .
-```
-
-**C. Imports/exports:**
-```bash
-grep -rn "import.*mapper" .
-grep -rn "export.*audience" .
-```
-
-**D. Similar functionality:**
-- Check if pattern already exists elsewhere
-- Look for existing utilities/helpers
-- Check for partial implementations
-- Search for Python files if task involves APIs/integrations (e.g., `python_jira_api.py`)
-
-**E. For UI changes - Search ALL locations (MANDATORY):**
-
-**⚠️ Sprint 3 Learning:** Task #13 failed because subtext existed in 3 components but only 1 was fixed.
-
-Before changing ANY UI text, label, or component:
-```bash
-# Search for ALL instances of the text/element
-grep -rn "Confident Campaigns" client/
-grep -rn "Approve" client/  # Find all "Approve" labels
-```
-
-**Check these common locations for duplicates:**
-- `client/src/components/layout/header.tsx`
-- `client/src/components/mobile/mobile-nav.tsx`
-- `client/src/components/mobile/mobile-*.tsx`
-- `client/src/pages/*.tsx`
-
-**Report all instances found:**
-```
-UI element search:
-- Found "Approve" in 4 files:
-  - dashboard.tsx:156 (dropdown menu)
-  - mobile-brief-card.tsx:71 (dropdown menu)
-  - mobile-dashboard.tsx:175 (stat card)
-  - brief-list.tsx:89 (action button)
-
-Will update ALL 4 locations.
-```
-
-**DO NOT proceed until all instances are identified.**
-
-**E. If found existing code - Evaluate and decide:**
-
-**Decision criteria:**
-
-**Extend existing code when:**
-- Same domain/purpose (e.g., found `python_jira_api.py`, building JIRA ticket feature)
-- Natural fit (adding new function to existing module)
-- Follows same patterns (same tech stack, conventions)
-- Code is well-structured (not a mess that needs refactoring first)
-
-**Build new when:**
-- Different domain (e.g., found support ticket code, building JIRA analytics)
-- Would require awkward refactoring
-- Different tech stack or patterns
-- Existing code is legacy/deprecated
-
-**Block with recommendation when:**
-- Genuinely ambiguous (could go either way)
-- Significant architectural decision
-- Existing code is complex and unclear
-- Multiple viable approaches
-
-**If extending:**
-```
-Search complete - Found existing implementation:
-- python_jira_api.py has create_ticket() function
-- Decision: EXTEND (same domain, natural fit)
-- Will add new create_enablement_ticket() function
-```
-
-**If building new:**
-```
-Search complete - Found related code:
-- Found supportTickets.ts (different domain - support vs JIRA)
-- Decision: BUILD NEW (different system, different patterns)
-- Will create jiraService.ts
-```
-
-**If blocking:**
-```
-BLOCKED - Need architectural decision
-
-Found existing implementation at server/tickets/ticketGenerator.ts
-- Handles support tickets currently
-- Could extend for JIRA, OR build separate jiraTickets.ts
-- Ambiguous whether these should share code
-
-Recommendation: Build separate (keeps concerns separated)
-But need confirmation before proceeding.
-```
-
-**Report findings:**
-```
-Search complete:
-- Found similar pattern in server/services/briefMapper.ts (can adapt)
-- No existing audienceMapper - creating new
-- Can reuse validation pattern from stdlib/validation_patterns.md
-```
-
-**Context discipline:** After search, write this "Search complete" summary. For all later steps (extend vs new, where to implement, blocking), use **only** this summary. Do not re-paste or re-quote full grep/find output in later reasoning or messages.
-
-**DO NOT PROCEED without searching first.**
-
-### 5.5. Block Immediately On Ambiguity
-
-**STOP and ASK before implementing if:**
-
-- ✋ Task requirements are vague (what/where/how unclear)
-- ✋ Need to guess IDs, formats, field names, API parameters
-- ✋ Found existing code that might handle this (see step 5E)
-- ✋ Integration path unclear ("how will this be called?")
-- ✋ Have built 2+ isolated services without connecting them
-- ✋ Specs contradict each other or are incomplete
-- ✋ stdlib doesn't cover this pattern and you're unsure which to use
-
-**Principle:** Over-communicate > guess wrong
-
-**How to block:**
-```
-BLOCKED: [reason]
-
-Need clarification on:
-- [specific question 1]
-- [specific question 2]
-
-Found during search:
-- [relevant findings]
-
-Cannot proceed without guidance.
-```
-
-Update sprint_plan.md with BLOCKED status and exit.
-
-### 5.75. Check Testing Requirements (ENFORCED)
-
-**Before implementing, determine if Playwright test is required.**
-
-**⚠️ ENFORCEMENT: Task is NOT complete until required tests exist and pass against staging.**
-
-Both Sprint 1 and Sprint 2 identified "no automated tests added" as a gap. This step now has enforcement.
-
-**Tests are REQUIRED for (non-negotiable):**
-- **User-facing features** - Any UI change users interact with
-- **Critical user flows** - Brief creation, audience builder, JIRA tickets, chat
-- **Form changes** - Any input field, button, or submission flow
-- **Authentication/authorization** - Login, permissions, session handling
-- **External API integrations** - Databricks, JIRA, Hightouch, ZGAI
-
-**Tests are OPTIONAL for:**
-- Internal refactoring (no user-visible behavior change)
-- CSS/styling only (no functional change)
-- Documentation updates
-- Backend-only changes with no UI impact
-
-**If tests REQUIRED - task completion checklist:**
-```
-Task: Build chat performance optimization
-
-Test requirement: REQUIRED (user-facing feature)
-
-Before marking complete:
-☐ Feature code implemented
-☐ data-testid added to relevant UI elements
-☐ Playwright test written in tests/*.spec.ts
-☐ Test covers happy path AND error states
-☐ Test passes against staging (step 10)
-
-Task is NOT complete until all boxes checked.
-```
-
-**How to write tests (two options):**
-
-**Option 1: Use AI Test Generator (Recommended)**
-
-The project has Playwright AI agents available. Use them:
-
-1. **Verify agents are initialized:**
-   ```bash
-   ls .claude/agents/playwright-test-*.md
-   ```
-   Expected: 3 agent files (generator, healer, planner)
-
-2. **Invoke test-generator agent:**
-   - Describe the feature behavior to test
-   - Agent will execute actions in real browser
-   - Agent generates test code automatically
-   - Test is saved to tests/[feature].spec.ts
-
-3. **Verify test works:**
-   ```bash
-   npm test -- tests/[feature].spec.ts
-   ```
-
-**Option 2: Write test manually (if agents unavailable)**
-
-Use this template:
-```typescript
-// tests/[feature].spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('[Feature Name]', () => {
-  test('should [expected behavior]', async ({ page }) => {
-    await page.goto('/');
-    // Test implementation
-    await expect(page.getByTestId('element-id')).toBeVisible();
-  });
-
-  test('should handle [error case]', async ({ page }) => {
-    // Error case test
-  });
-});
-```
-
-**If tests NOT required:**
-```
-Task: Refactor audienceMapper.ts (internal refactoring)
-
-Test requirement: NOT REQUIRED (internal refactoring, no UI change)
-Reason: No user-visible behavior change
-Verification: Existing tests still pass
-```
-
-**DO NOT skip required tests.** If blocked on test writing, mark task as BLOCKED with reason.
-
-### 6. Implement ONE Thing
-
-Follow the specs and stdlib patterns.
-
-**Key rules:**
-- DO NOT implement placeholders (full implementation or nothing)
-- DO NOT implement "TODO" as code comments (implement completely)
-- DO implement according to specs/ requirements
-- DO follow stdlib/ technical patterns
-- DO respect constraints (e.g., draft-only execution mode)
-
-**Example:**
-
-Task: "Brief → audience logic mapper (deterministic, no AI calls)"
-
-From specs/audience_builder.md:
-- Input: marketing brief
-- Output: audience logic (inclusion/exclusion rules, time windows, geography)
-- Constraint: Deterministic (same input → same output)
-- Constraint: No AI calls, no DB calls
-
-From stdlib/validation_patterns.md:
-- Use Zod schemas for validation
-- Return structured errors
-- TypeScript with proper types
-
-**Implement:**
-```typescript
-// server/services/audienceMapper.ts
-import { z } from "zod";
-
-export const briefInputSchema = z.object({
-  objective: z.string(),
-  targetAudience: z.string().optional(),
-  geography: z.string().optional(),
-  timeWindow: z.string().optional()
-});
-
-export type BriefInput = z.infer<typeof briefInputSchema>;
-
-export interface AudienceLogic {
-  inclusion: string[];
-  exclusion: string[];
-  timeWindow: string | null;
-  geography: string[] | null;
-}
-
-export function mapBriefToAudienceLogic(brief: BriefInput): AudienceLogic {
-  const validated = briefInputSchema.parse(brief);
-
-  // Deterministic mapping logic
-  return {
-    inclusion: parseInclusionCriteria(validated.targetAudience),
-    exclusion: parseExclusionCriteria(validated.targetAudience),
-    timeWindow: validated.timeWindow || null,
-    geography: validated.geography ? [validated.geography] : null
-  };
-}
-
-function parseInclusionCriteria(target?: string): string[] {
-  if (!target) return [];
-  // Deterministic parsing logic here
-  return target.split(",").map(s => s.trim()).filter(Boolean);
-}
-
-function parseExclusionCriteria(target?: string): string[] {
-  // Deterministic exclusion logic here
-  return [];
-}
-```
-
-### 7. Local Validation (TypeScript Only)
-
-Run quick local validation before pushing:
-
-```bash
-# TypeScript must compile - catches obvious errors before deploy
 npm run check
 ```
 
-**If TypeScript fails:**
-- Fix the errors before proceeding
-- Do NOT push broken code
+TypeScript must compile. Fix errors before proceeding. Do not push broken code.
 
-**If TypeScript passes:**
-- Proceed to git workflow
+We skip local E2E — real testing happens against staging.
 
-**Note:** We skip local E2E tests. Real testing happens against staging where it's more realistic.
+### 12. Git Workflow
 
-### 8. Git Workflow - Branch, Commit, Push, Merge
+**A. Branch:** `ralph/task-{N}-{slug}` (slug: lowercase, hyphens, max 30 chars)
 
-**A. Create task branch:**
-
-Generate branch name from task number and slug:
+**B. Commit:** Stage specific files (not `git add -A`):
 ```bash
-# Example: ralph/task-3-brief-mapper
-git checkout -b ralph/task-{N}-{slug}
-```
-
-**Branch naming:**
-- Prefix: `ralph/task-`
-- Task number from sprint_plan.md
-- Slug: lowercase, hyphens, max 30 chars (e.g., `brief-mapper`, `jira-integration`)
-
-**B. Stage and commit changes:**
-
-```bash
-# Stage specific files (not git add -A)
-git add [files you changed]
-
-# Commit with descriptive message
 git commit -m "$(cat <<'EOF'
-[Task #N] Brief description of what was implemented
+[Task #N] Brief description
 
 - Detail 1
 - Detail 2
@@ -640,1201 +187,160 @@ EOF
 )"
 ```
 
-**C. Push branch to GitLab:**
-
-```bash
-git push -u origin ralph/task-{N}-{slug}
-```
+**C. Push:** `git push -u origin ralph/task-{N}-{slug}`
 
 **D. Merge to main:**
-
 ```bash
-# Switch to main and pull latest
-git checkout main
-git pull origin main
-
-# Merge the task branch
+git checkout main && git pull origin main
 git merge ralph/task-{N}-{slug}
-
-# Push to main (triggers staging deploy)
 git push origin main
 ```
 
-**If merge conflicts:**
-- STOP immediately
-- Report conflict details
-- Update sprint_plan.md with BLOCKED status
-- Human must resolve conflicts
+If merge conflicts: stop, report details, mark BLOCKED. Human resolves.
 
-### 9. Wait for Staging Deploy
+### 13. Wait for Staging
 
-After pushing to main, staging auto-deploys in ~5 minutes.
-
-**Wait and verify deployment:**
+Staging auto-deploys in ~5 minutes after pushing to main.
 
 ```bash
-# Wait 5 minutes for deploy
 sleep 300
-
-# Check staging is responding
-curl -s -o /dev/null -w "%{http_code}" https://marketing-copilot-staging.zgtools.net/health
+curl -s -o /dev/null -w "%{http_code}" $RALPH_STAGING_URL/health
 ```
 
-**Expected:** HTTP 200
+Expected: HTTP 200. If not responding, check the GitLab pipeline. If pipeline failed, BLOCK. If still running, wait 2 more minutes.
 
-**If staging not responding after 5 min:**
-- Check GitLab pipeline: https://gitlab.zgtools.net/tpm_cdp_team/marketing-copilot/-/pipelines
-- If pipeline failed → BLOCK, report error, human must fix
-- If pipeline running → wait another 2 minutes
+### 14. Test and Verify
 
-### 10. Run Playwright Against Staging
-
-Run E2E tests against the real staging environment:
+**A. Run Playwright against staging:**
 
 ```bash
-# Run Playwright tests against staging
-STAGING_URL=https://marketing-copilot-staging.zgtools.net npm test
+STAGING_URL=$RALPH_STAGING_URL npm test
 ```
 
-**Or if test config uses environment variable:**
-```bash
-npx playwright test --config=playwright.config.ts
-```
+Test against staging, not localhost. After each run, write a short test summary (e.g., "12 passed, 0 failed"). Use only this summary for decisions — do not re-paste full test output.
 
-**Test against staging URL, not localhost.**
+**B. Visual verification for UI changes:**
 
-### 10.5. Visual Verification for UI Changes (MANDATORY)
+Sprint 3 Learning: 36% of UI tasks failed because code was committed but never visually verified.
 
-**⚠️ Sprint 3 Learning:** 36% of UI tasks failed validation because code was committed but UI wasn't visually verified. Code commit ≠ UI change visible.
+1. Open staging in browser, navigate to affected page
+2. Confirm the change is visible (check mobile viewport if applicable)
+3. Run `git status` — if source files are modified, the change was NOT deployed
 
-**For ANY task that changes UI (labels, layout, components, styling):**
+Do not mark UI tasks complete without visual verification.
 
-1. **Wait for staging deploy** (step 9)
+**C. If tests fail:**
 
-2. **Open staging in browser and visually verify:**
-   - Navigate to the affected page/component
-   - Confirm the change is visible
-   - Check on mobile viewport if applicable
+Determine if the test broke due to your code changes (heal the test with playwright-test-healer) or if your implementation has a bug (fix the code). Try up to 2 fix attempts, then BLOCK.
 
-3. **Check for uncommitted changes:**
-   ```bash
-   git status
-   ```
-   **If any source files show as modified, the change was NOT deployed.** Commit and push before marking complete.
-
-4. **Document verification:**
-   ```
-   Visual verification:
-   ✓ Opened staging URL
-   ✓ Navigated to [page/component]
-   ✓ Confirmed [specific change] is visible
-   ✓ git status shows clean working directory
-   ```
-
-**Common failure modes (from Sprint 3):**
-- Changes in working directory but never committed (Task #5)
-- Fixed one component but same text exists in others (Task #13)
-- Edited wrong component (similar UI in multiple files)
-
-**DO NOT mark UI tasks complete without visual verification.**
-
-**If Playwright tests PASS:**
-- AND visual verification confirms change is visible
-- Proceed to update sprint_plan.md
-- Task is verified working in real environment
-
-**If Playwright tests FAIL:**
-
-1. **Capture failure details:**
-   ```
-   STAGING TEST FAILURE
-
-   Test: [test name]
-   Error: [error message]
-   Screenshot: [if available]
-   ```
-
-2. **Determine failure type:**
-
-   **If test is broken due to code changes (not a bug):**
-   - Use playwright-test-healer agent to fix the test
-   - Agent analyzes failure and updates test to match new behavior
-   - Re-run tests to verify fix
-   - Commit updated test with fix
-
-   **If implementation has a bug:**
-   - Create fix branch:
-     ```bash
-     git checkout -b ralph/fix-task-{N}-{attempt}
-     ```
-   - Fix the bug in implementation code
-   - Re-run tests to verify
-   - Commit and push fix
-
-3. **If unable to fix after 2 attempts:**
-   - Update sprint_plan.md with BLOCKED status
-   - Document what failed and why
-   - Human must investigate
-
-**Principle:** Code isn't done until it works in staging. "It worked locally" is not acceptable.
-
-**Context discipline:** After every test run (pass or fail), write a short **test summary** (e.g. "12 passed, 0 failed" or "10 passed, 2 failed: [test name]: [one-line reason]"). Use **only** this summary for pass/fail and fix decisions. Do not re-paste the full test log in the next reasoning or message.
-
-### 10.75. Rollback on Catastrophic Test Failures
-
-**If Playwright tests fail catastrophically (>50% failure rate):**
-
-Not just broken tests - staging is broken and unusable.
-
-**Triggers:**
-- More than 50% of tests failing
-- Critical user flows completely broken (login, navigation, etc.)
-- Staging returns 500 errors or is unresponsive
-
-**Rollback procedure:**
-
-1. **Revert the merge commit:**
-   ```bash
-   git revert HEAD
-   git push origin main
-   ```
-
-2. **Wait for staging to re-deploy:**
-   ```bash
-   sleep 300  # Wait 5 minutes for rollback deploy
-   curl -s -o /dev/null -w "%{http_code}" https://[staging-url]/health
-   ```
-
-3. **Update sprint_plan.md:**
-   ```markdown
-   1. [#X] Task name - BLOCKED
-     - Blockers: Catastrophic test failures, staging rolled back
-     - Why rolled back: [X]% of tests failing, staging unusable
-     - What failed: [list of test failures]
-     - Next steps: Fix issues locally, re-run tests before re-deploying
-   ```
-
-4. **Report to user:**
-   ```
-   🚨 ROLLED BACK - Catastrophic Test Failure
-
-   Tests failed: [X]% failure rate
-   Critical flows broken: [list]
-
-   Actions taken:
-   - Reverted merge commit
-   - Staging rolled back to previous working state
-   - Task marked BLOCKED in sprint_plan.md
-
-   Next steps:
-   1. Review test failures locally
-   2. Fix implementation issues
-   3. Run tests locally before re-deploying
-   ```
-
-**If rollback fails or staging still broken:**
-
-- Mark task as BLOCKED
-- Alert user that manual intervention is required
-- Do NOT proceed with additional rollback attempts
-
-### 11. Update sprint_plan.md - Real-Time Updates
-
-**Update sprint_plan.md DURING work, not just at the end:**
-
----
-
-## ⚠️ CRITICAL: Time & Cost Tracking is MANDATORY
-
-**For EVERY task, you MUST:**
-1. ✅ Capture start timestamp with `date +%s` when starting
-2. ✅ Record it in sprint_plan.md immediately
-3. ✅ Capture end timestamp when completing
-4. ✅ Calculate actual duration: `(end - start) / 60`
-5. ✅ Track token usage from system warnings (input/output)
-6. ✅ Calculate cost: (tokens / 1M) × model pricing
-7. ✅ Show calculation in completion entry
-
-**NO ESTIMATES ALLOWED:**
-- ❌ "Duration: ~10 min" - INVALID
-- ❌ "Duration: about 8 minutes" - INVALID
-- ❌ "Cost: roughly $0.20" - INVALID
-- ✅ "Duration: 8 min (calculated: (end - start) / 60)" - VALID
-- ✅ "Performance: 8 min | 12.5K in, 3.2K out | $0.09" - VALID
-
-**Why this matters:** Accurate time AND cost tracking is required for ROI metrics and business case. We need to demonstrate value vs. engineer baseline ($50-75/hr × 6-8 hours = $300-600 for equivalent work).
-
-**Human will verify:** After you report "task complete", human will check for timestamps, token usage, and cost calculation. If missing, completion will be rejected.
-
----
-
-**A. When starting a task:**
-
-First, capture start timestamp:
-```bash
-date +%s  # Returns Unix timestamp (seconds)
-```
-
-Store in sprint_plan.md:
-```markdown
-1. [#1] Brief → audience logic mapper - IN PROGRESS
-   - Blockers: none
-   - Started: 2026-01-26
-   - Start timestamp: 1706294400
-```
-
-Keep timestamp on its own line for easy extraction later.
-
-**Example:**
-```bash
-# Ralph runs this when starting task
-date +%s
-# Returns: 1706294400
-```
-
-Then adds to sprint_plan.md:
-```markdown
-- Start timestamp: 1706294400
-```
-
-**B. When discovering blockers mid-work:**
-
-Capture blocked timestamp:
-```bash
-date +%s  # Get blocked timestamp
-```
-
-Extract start timestamp from task metadata, calculate partial duration:
-```
-partial_duration = (blocked_timestamp - start_timestamp) / 60
-```
-
-Update sprint_plan.md:
-```markdown
-1. [#1] Brief → audience logic mapper - BLOCKED
-   - Blockers: Need custom field IDs for JIRA integration
-   - Started: 2026-01-26
-   - Start timestamp: 1706294400
-   - Blocked timestamp: 1706294880
-   - Time before blocking: 8 min
-   - Why blocked: Need custom field IDs for JIRA integration
-   - What's needed: Zach to provide JIRA field IDs
-```
-
-Move to "Blocked" section immediately, don't wait until end.
-
-**When resuming blocked task:**
-
-Capture resume timestamp:
-```bash
-date +%s  # Get resume timestamp
-```
-
-Update task in sprint_plan.md:
-```markdown
-1. [#1] Brief → audience logic mapper - IN PROGRESS (RESUMED)
-   - Blockers: [resolved]
-   - Started: 2026-01-26
-   - Start timestamp: 1706294400
-   - Blocked timestamp: 1706294880
-   - Time before blocking: 8 min
-   - Resumed timestamp: 1706381280
-```
-
-Continue work from where you left off.
-
-**C. When discovering new work:**
-Add to appropriate priority section as you find it:
-```markdown
-## Medium Priority
-
-12. [#12] Add error handling for invalid brief format (discovered during #3 implementation)
-    - Blockers: blocked by #3
-```
-
-**D. When completing task - Move to Completed:**
-
-**Step 1: Capture completion timestamp and calculate duration**
+**D. Catastrophic failure (>50% tests failing or staging unresponsive):**
 
 ```bash
-date +%s  # Get end timestamp
+git revert HEAD
+git push origin main
 ```
 
-Extract timestamps from task metadata in sprint_plan.md.
+Wait for rollback deploy, mark task BLOCKED with failure details. Do not attempt additional rollback attempts — alert user for manual intervention.
 
-**Case A: Task completed without blocking**
-- Has start_timestamp only
-- Calculate: `duration = (end_timestamp - start_timestamp) / 60`
+### 15. Update sprint_plan.md
 
-**Case B: Task was blocked and resumed**
-- Has start_timestamp, blocked_timestamp, resumed_timestamp
-- Calculate phases:
-  - Phase 1: `(blocked_timestamp - start_timestamp) / 60`
-  - Phase 2: `(end_timestamp - resumed_timestamp) / 60`
-  - Total: Phase 1 + Phase 2
+Update the plan as you work, not just at the end.
 
-**Case C: Task blocked multiple times**
-- Sum all work phases (start→block, resume→block, resume→complete)
-- Exclude blocked wait time (block→resume)
+**Blocked mid-work:** Move task to Blocked section with reason and what's needed.
 
-Round to nearest minute (or 1 decimal place if <10 min).
+**Discovered new work:** Add to appropriate priority section with `(discovered during #N)`.
 
-**Step 2: Get token usage**
+**Completing task:** Move to Completed section with this exact format:
 
-From system warnings in conversation:
-```
-Token usage: 78139/200000; 121861 remaining
-```
-
-Calculate tokens used for THIS task:
-- Subtract tokens at task start from tokens at task end
-- This gives input tokens consumed
-- Output tokens are estimated (typically 20-30% of input, or use actual if available)
-
-If can't calculate delta (no baseline), note current total and mark as "partial tracking".
-
-**Step 2.5: Validate Token Counts**
-
-After extracting token usage from system warnings, validate:
-
-```bash
-input_tokens=12500
-output_tokens=3200
-
-# Sanity check input tokens (1K-200K expected for normal tasks)
-if [ $input_tokens -lt 1000 ]; then
-  echo "⚠️  WARNING: Input tokens ${input_tokens} seems too low (<1K)"
-  echo "Double-check token extraction from system warnings"
-elif [ $input_tokens -gt 200000 ]; then
-  echo "⚠️  WARNING: Input tokens ${input_tokens} approaching context limit"
-  echo "Task may have hit context window constraint"
-fi
-
-# Sanity check output tokens (100-50K expected)
-if [ $output_tokens -lt 100 ]; then
-  echo "⚠️  WARNING: Output tokens ${output_tokens} seems too low"
-elif [ $output_tokens -gt 50000 ]; then
-  echo "⚠️  WARNING: Output tokens ${output_tokens} seems unusually high"
-fi
-
-# Check output/input ratio (typically 10-30%)
-ratio=$(( output_tokens * 100 / input_tokens ))
-if [ $ratio -lt 5 ]; then
-  echo "⚠️  WARNING: Output/input ratio ${ratio}% seems low (<5%)"
-  echo "Expected range: 5-50%"
-elif [ $ratio -gt 50 ]; then
-  echo "⚠️  WARNING: Output/input ratio ${ratio}% seems high (>50%)"
-  echo "Expected range: 5-50%"
-fi
-
-echo "✓ Token counts validated (${input_tokens} in, ${output_tokens} out, ${ratio}% ratio)"
-```
-
-These are warnings, not fatal errors - continue with task completion but flag anomalies.
-
-**Step 3: Calculate cost**
-
-Using model pricing (Sonnet 4.5 as of 2026-01):
-- Input: $3 per million tokens
-- Output: $15 per million tokens
-
-Cost = (input_tokens / 1_000_000 × $3) + (output_tokens / 1_000_000 × $15)
-
-**Step 3.5: Pre-Completion Validation (MANDATORY)**
-
-**Before moving task to Completed section, verify ALL tracking data exists:**
-
-```bash
-# 1. Verify start timestamp exists and is valid
-start_ts=$(grep -A 5 "\[#${CURRENT_TASK}\]" sprint_plan.md | grep "Start timestamp:" | awk '{print $NF}')
-
-if [[ -z "$start_ts" ]]; then
-  echo "❌ FATAL: Cannot complete task - start timestamp missing"
-  echo "Task #${CURRENT_TASK} has no start timestamp in sprint_plan.md"
-  echo "BLOCKING task - human must add tracking data or accept incomplete metrics"
-  # Update sprint_plan.md with BLOCKED status
-  exit 1
-fi
-
-if [[ ! "$start_ts" =~ ^[0-9]{10}$ ]]; then
-  echo "❌ FATAL: Invalid start timestamp format: $start_ts"
-  echo "Expected 10-digit Unix timestamp"
-  exit 1
-fi
-
-# 2. Capture end timestamp
-end_ts=$(date +%s)
-
-# 3. Verify end > start
-if [ $end_ts -le $start_ts ]; then
-  echo "❌ FATAL: End timestamp ($end_ts) must be after start ($start_ts)"
-  echo "System clock issue or incorrect timestamp"
-  exit 1
-fi
-
-# 4. Calculate duration and verify reasonable
-duration=$(( (end_ts - start_ts) / 60 ))
-
-if [ $duration -lt 1 ]; then
-  echo "⚠️  WARNING: Duration ${duration} min seems too short"
-  echo "Start: $start_ts ($(date -r $start_ts '+%H:%M:%S'))"
-  echo "End: $end_ts ($(date -r $end_ts '+%H:%M:%S'))"
-  echo "Continuing but flagged for review"
-elif [ $duration -gt 120 ]; then
-  echo "⚠️  WARNING: Duration ${duration} min seems too long (>2 hours)"
-  echo "Expected: 1-120 min for properly sized tasks"
-  echo "Start: $start_ts ($(date -r $start_ts '+%H:%M:%S'))"
-  echo "End: $end_ts ($(date -r $end_ts '+%H:%M:%S'))"
-  echo "Continuing but flagged for review"
-fi
-
-echo "✓ Time tracking validation passed"
-echo "  Duration: $duration min"
-echo "  Start: $(date -r $start_ts '+%Y-%m-%d %H:%M:%S')"
-echo "  End: $(date -r $end_ts '+%Y-%m-%d %H:%M:%S')"
-```
-
-**If ANY validation fails:**
-
-- DO NOT mark task complete
-- Update sprint_plan.md with BLOCKED status
-- Document what's missing: "BLOCKED: Missing/invalid time tracking data"
-- Require human to either add tracking data or accept incomplete metrics
-
-**Step 4: Format completion entry**
-
-**Case A: Completed without blocking**
-
-From:
-```markdown
-## Critical Path
-
-1. [#1] Brief → audience logic mapper (deterministic, no AI calls)
-   - Blockers: none
-   - Started: 2026-01-26
-   - Start timestamp: 1706294400
-```
-
-To:
 ```markdown
 ## Completed
 
-- [x] [#1] Brief → audience logic mapper (deterministic, no AI calls) - 2026-01-26
-  - Created server/services/audienceMapper.ts
-  - Deterministic mapping from brief to audience logic
-  - Zod validation, TypeScript types
-  - Validation: npm run check passed, export verified
-  - **Performance:** 8 min | 12.5K in, 3.2K out | $0.18
-    - Duration calc: (1706294880 - 1706294400) / 60 = 480 / 60 = 8 min
-    - Cost calc: (12.5K/1M × $3) + (3.2K/1M × $15) = $0.0375 + $0.048 = $0.0855 → $0.18
-    - Timestamps: ✓ valid
+- [x] **#4** Add globalTeardown to playwright.config.ts
+  - Added tests/fixtures/globalTeardown.ts
+  - Configured playwright.config.ts
+  - **Performance:** SHELL_WILL_UPDATE
 ```
 
-**Case B: Completed after being blocked**
+**The literal string `SHELL_WILL_UPDATE` is required.** The shell replaces it with actual duration, model, and cost after you exit. Do not attempt to calculate these yourself.
 
-From:
-```markdown
-## Blocked
+Update the "Last updated" timestamp.
 
-1. [#1] Brief → audience logic mapper - IN PROGRESS (RESUMED)
-   - Blockers: [resolved]
-   - Started: 2026-01-26
-   - Start timestamp: 1706294400
-   - Blocked timestamp: 1706294880
-   - Time before blocking: 8 min
-   - Resumed timestamp: 1706381280
-```
+### 16. Update RALPH.md
 
-To:
-```markdown
-## Completed
+Only if you learned something new about building/running the project — a non-obvious build command, environment quirk, or validation pattern. One line per learning. Most tasks don't need a RALPH.md update.
 
-- [x] [#1] Brief → audience logic mapper (deterministic, no AI calls) - 2026-01-27
-  - Created server/services/audienceMapper.ts
-  - Deterministic mapping from brief to audience logic
-  - Zod validation, TypeScript types
-  - Validation: npm run check passed, export verified
-  - **Performance:** 15 min (8 min + 7 min after unblock) | 25K in, 6K out | $0.35
-  - **Note:** Blocked for missing Databricks schema, resumed after data provided
-```
+### 17. Finish
 
-**Performance format:**
-```
-[duration] min | [input]K in, [output]K out | $[cost]
-```
+**If sprint is NOT complete:**
 
-For blocked tasks, show breakdown:
-```
-[total] min ([phase1] min + [phase2] min after unblock) | [tokens] | [cost]
-```
+Report what you implemented, validation results, sprint progress, and the next task. Then stop.
 
-Examples:
-- `8 min | 12.5K in, 3.2K out | $0.18`
-- `15 min | 45K in, 8K out | $0.26`
-- `3.5 min | 5K in, 1K out | $0.08`
-
-**Full example workflow:**
-
-Task starts:
-```bash
-date +%s  # Returns: 1706294400
-```
-
-Task completes (8 minutes later):
-```bash
-date +%s  # Returns: 1706294880
-```
-
-Calculation:
-```
-Duration = (1706294880 - 1706294400) / 60 = 480 / 60 = 8 minutes
-```
-
-Token usage from system warnings:
-- Task start: "Token usage: 65000/200000"
-- Task end: "Token usage: 77500/200000"
-- Input tokens: 77500 - 65000 = 12500 (12.5K)
-- Output tokens: ~3200 (estimated from output length)
-
-Cost calculation:
-```
-Input cost: 12500 / 1000000 × $3 = $0.0375
-Output cost: 3200 / 1000000 × $15 = $0.048
-Total: $0.0855 ≈ $0.09 (or use $0.18 if output was actually higher)
-```
-
-Final entry:
-```markdown
-- [x] Task name - 2026-01-26
-  - **Performance:** 8 min | 12.5K in, 3.2K out | $0.18
-```
-
-**If start timestamp missing (edge case):**
-
-If task was started without timestamp (before tracking was added, or conversation interrupted):
-```markdown
-- [x] Task name - 2026-01-26
-  - **Performance:** duration unknown | 12.5K in, 3.2K out | $0.18
-  - Note: Started before timestamp tracking enabled
-```
-
-Still track cost and tokens. Duration can be noted as "N/A" in sprint summary.
-
-**E. Update Sprint Performance Summary:**
-
-At the bottom of sprint_plan.md, maintain a running performance summary.
-
-**After each task completion:**
-
-1. Parse all completed tasks for performance data
-2. Sum totals: duration, tokens, cost
-3. Calculate averages: total / completed_count
-4. Update summary section
-
-```markdown
----
-
-## Sprint Performance Summary
-
-**Sprint:** [sprint name/number]
-**Started:** [date]
-**Status:** In Progress
-
-**Completed so far:** 3/8 tasks
-**Total duration:** 24 min
-**Total cost:** $0.54
-**Avg per task:** 8.0 min / $0.18
-
-**Cost comparison:** Engineer baseline ~$300-400 (loaded rate) for 6-8 hours
-```
-
-**Calculation example:**
-
-Completed tasks:
-- Task 1: 8 min | $0.18
-- Task 2: 12 min | $0.31
-- Task 3: 4 min | $0.05
-
-Totals:
-- Duration: 8 + 12 + 4 = 24 min
-- Cost: $0.18 + $0.31 + $0.05 = $0.54
-- Average: 24/3 = 8.0 min, $0.54/3 = $0.18
-
-Update after each task completion. When all tasks complete, mark status as "Complete" and add completion date.
-
-**F. Update "Last updated" timestamp:**
-```markdown
-**Last updated:** 2026-01-26 (by ralph after completing #1 audience mapper)
-```
-
-**Principle:** sprint_plan.md is a living document. Update it as you learn, not just when done.
-
-### 11.5. Recovery Procedures for Missing Tracking Data
-
-**If start timestamp is missing but task was completed:**
-
-DO NOT make up timestamps. Use these recovery options in order of preference:
-
-**Option 1: Git commit timestamp (most accurate)**
-```bash
-# Find commit for this task
-commit_time=$(git log --grep="Task #${CURRENT_TASK}" --format="%at" | head -1)
-
-if [ -n "$commit_time" ]; then
-  echo "Found commit timestamp: $commit_time"
-  echo "Using as approximate start time (actual work may have started earlier)"
-  # Mark duration as approximate
-fi
-```
-
-**Option 2: Terminal/conversation log timestamp**
-If running via ralph-continuous, check terminal log for session start time.
-
-**Option 3: Mark as unknown (last resort)**
-
-```markdown
-- **Performance:** duration unknown | 12.5K in, 3.2K out | $0.18
-  - ERROR: Start timestamp not captured during task execution
-  - Tokens and cost tracked, duration unavailable
-  - Impact: Sprint summary will note incomplete duration tracking
-  - Future: Step 4.5 now enforces timestamp capture before work starts
-```
-
-**CRITICAL RULE: Never fabricate timestamps.**
-
-"Unknown" is acceptable. Inaccurate is not.
-
-**Impact on sprint metrics:**
-
-- Sprint summary will note: "Duration data incomplete for X tasks"
-- Cost and token tracking remain accurate
-- ROI calculations will use only tasks with complete duration data
-- Mark sprint as "Partial tracking" in performance insights
-
-### 12. Update RALPH.md (If You Learned Something)
-
-**Only update if you learned something new** about building/running the project.
-
-**Good reasons to update:**
-- Discovered non-obvious build command
-- Found new way to run tests
-- Learned about environment quirk
-- Discovered validation pattern
-
-**Bad reasons:**
-- Just completed a task (that's sprint_plan.md's job)
-- Added a new file (not RALPH.md's concern)
-
-**Example update:**
-
-If you learned TypeScript requires explicit file extensions in imports:
-```markdown
-## Ralph's Learning Log
-
-**2026-01-26:** TypeScript ESM requires explicit .js extensions in imports, even for .ts files. Use `import { x } from './file.js'` not `import { x } from './file'`.
-```
-
-Keep it brief. One line per learning.
-
-### 13. Check if Sprint Complete
-
-After updating sprint_plan.md, check if sprint is complete:
-
-**Sprint is complete when:**
-- All items in Critical Path / High Priority / Medium Priority sections are in "Completed"
-- No items remain uncompleted (except Low Priority, which is optional)
-- OR user explicitly says sprint is done
-
-**If sprint NOT complete:**
-
-Report task completion and stop:
 ```
 === Task Complete ===
 
-Implemented:
-[x] Brief → audience logic mapper
+Implemented: [task description]
+Validation: TypeScript, GitLab, Staging, Playwright
+Sprint Progress: X/Y tasks
+Next: [next task]
 
-Created:
-- server/services/audienceMapper.ts (105 lines)
-
-Validation:
-✓ npm run check passed
-✓ Pushed to GitLab, merged to main
-✓ Staging deploy successful
-✓ Playwright tests passed against staging
-
-Updated:
-- sprint_plan.md (moved to completed)
-
-Sprint Progress: 9/14 tasks complete
-
-Next most important thing:
-[ ] Validation layer (required fields, conflict detection)
-
-Run /ralph again to continue, or review implementation first.
+Run /ralph again to continue.
 ```
 
 **If sprint IS complete:**
 
-Proceed to automatic archiving (step 11).
+Invoke `/ralph-archive` with the project directory.
 
-### 14. Auto-Archive Sprint (If Complete)
-
-When sprint is complete, automatically archive it.
-
-**A. Determine sprint number:**
-```bash
-# Count existing sprint directories
-ls -d sprints/sprint-* 2>/dev/null | wc -l
-```
-New sprint = count + 1
-
-**B. Auto-generate sprint theme:**
-
-Analyze completed tasks to infer theme. Look for:
-- Common domain (e.g., "audience builder", "jira integration", "api performance")
-- Technical focus (e.g., "testing framework", "data pipeline", "ui components")
-- Business context (e.g., "v1 foundation", "migration", "refactoring")
-
-**Theme format:** 2-4 words, lowercase-with-dashes
-
-**Examples:**
-- If tasks mostly about audience builder → "audience-builder-foundation"
-- If tasks about JIRA integration → "jira-integration"
-- If tasks about testing → "testing-framework-setup"
-- If mixed infrastructure work → "infrastructure-improvements"
-
-Use most specific theme that covers >50% of tasks.
-
-**C. Extract performance data:**
-
-From sprint_plan.md "Sprint Performance Summary":
-- Total tasks, duration, cost
-- Start date, calculate end date (today)
-
-**D. Calculate ROI metrics:**
-
-Engineer baseline: 7 hours, $350 (at $50/hr)
-
-Speed advantage: `(420 min) / [actual duration]`
-Cost reduction: `100 × (1 - [cost] / $350)`
-Savings: `$350 - [actual cost]`
-
-**E. Generate sprint_summary.md:**
-
-Follow template from `sprints/sprint_summary.template.md`.
-
-Include:
-- Performance metrics
-- Business case comparison (ROI)
-- All completed tasks with performance data
-- Technical learnings from sprint_plan.md
-- Quality metrics (test pass rate, blockers)
-- What worked / what to improve (infer from blockers and learnings)
-
-**F. Create archive:**
-```bash
-mkdir -p sprints/sprint-[N]-[theme]
-cp sprint_plan.md sprints/sprint-[N]-[theme]/
-# Write generated sprint_summary.md
-```
-
-**G. Update sprint_history.md:**
-
-Add entry at top:
-```markdown
-## Sprint [N]: [Theme]
-
-**Status:** ✅ Complete
-**Duration:** [start] - [end]
-**Theme:** [description]
-
-**Performance:**
-- Tasks: [X] completed
-- Duration: [Y] min
-- Cost: $[Z]
-- ROI: [X]x faster, [X]% cost reduction
-
-[View details](./sprint-[N]-[theme]/)
-
----
-```
-
-**H. Create fresh sprint_plan.md:**
-
-Reset for next sprint with template noting previous sprint performance.
-
-**I. Report archive completion:**
-```
-=== Sprint Complete & Archived ===
-
-Sprint #[N]: [Theme]
-Duration: [start] - [end]
-
-Performance:
-- Tasks: [X] completed
-- Time: [Y] min
-- Cost: $[Z]
-- ROI: [X]x faster, [X]% cost reduction
-
-Archived to:
-- sprints/sprint-[N]-[theme]/
-
-Fresh sprint_plan.md created for Sprint #[N+1].
-
-Ready to start next sprint!
-Run /ralph-plan to generate new plan.
-```
-
-### 15. STOP
-
-Do not continue to next task. Human reviews first.
-
-If sprint was archived, human will start planning Sprint N+1.
+**Then stop.** Do not continue to the next task. Human reviews first.
 
 ---
 
-## Guidelines
+## Time Tracking Reference
 
-### One Thing Per Loop
+Shell handles all time/cost math. You handle status updates.
 
-**Only implement ONE item from sprint_plan.md per invocation.**
+| Responsibility | You | Shell |
+|---|---|---|
+| Mark IN PROGRESS | Yes | - |
+| Record what you did | Yes | - |
+| Write `**Performance:** SHELL_WILL_UPDATE` | Yes | - |
+| Calculate duration, cost, model label | - | Yes |
+| Replace placeholder with actual data | - | Yes |
+| Update sprint totals | - | Yes |
 
-This is not negotiable. It's the core philosophy.
-
-**Why:**
-- Preserves context window (fresh start each loop)
-- Allows human review
-- Prevents runaway behavior
-- Keeps changes focused and testable
-
-### Integration Checkpoints - Stop Building, Start Connecting
-
-**After building 2-3 isolated services, STOP and check:**
-
-```
-I've built [service1], [service2], [service3].
-
-Before continuing:
-- How do these connect?
-- What API route calls them?
-- What's the frontend integration?
-- Should I build integration layer now?
-```
-
-**Red flag:** Building 8+ services with no orchestration/integration layer.
-
-**Solution:** sprint_plan.md should have "Integration/Testing" section that's explicitly blocked by the services it connects.
-
-**When to pause for integration:**
-- Built 2-3 services
-- About to start building more services
-- No clear path for how they'll be called
-
-**What to do:**
-1. Check sprint_plan.md for Integration/Testing tasks
-2. If they're unblocked (services are ready), implement integration next
-3. If unclear, BLOCK and ask: "Should I integrate services #1-#3 before continuing?"
-
-### Search Before Implementing
-
-**Always search codebase thoroughly before writing new code.**
-
-**Keep context lean:** Reason from summaries (search results, test results), not from raw tool output. Write a short summary after search and after test runs; use only that summary for the next decision.
-
-Use 500 parallel subagents if needed. Common patterns:
-- File name search
-- Function name search
-- Import/export search
-- Similar functionality search
-
-**Don't assume it's not implemented just because you haven't found it.**
-
-### No Placeholders
-
-**Do not implement placeholder/minimal implementations.**
-
-```typescript
-// ❌ BAD (placeholder)
-export function mapBriefToAudienceLogic(brief: BriefInput): AudienceLogic {
-  return { inclusion: [], exclusion: [], timeWindow: null, geography: null };
-}
-
-// ✅ GOOD (full implementation)
-export function mapBriefToAudienceLogic(brief: BriefInput): AudienceLogic {
-  const validated = briefInputSchema.parse(brief);
-  return {
-    inclusion: parseInclusionCriteria(validated.targetAudience),
-    exclusion: parseExclusionCriteria(validated.targetAudience),
-    timeWindow: validated.timeWindow || null,
-    geography: validated.geography ? [validated.geography] : null
-  };
-}
-```
-
-### Block on Failure
-
-**If validation fails, STOP immediately.**
-
-Do not try to fix and continue. Report the failure, update sprint_plan.md with BLOCKED status, exit.
-
-Human will fix and run `/ralph` again to retry.
-
-### Follow stdlib Patterns
-
-**Respect technical patterns in stdlib/.**
-
-If stdlib says "use Zod schemas" → use Zod schemas
-If stdlib says "timestamps are strings" → use strings, not Dates
-If stdlib says "session-based auth" → use session-based auth
-
-### Update RALPH.md Sparingly
-
-**Only update RALPH.md if you learned something about building/running the project.**
-
-Not every task requires an update. Most don't.
+Why: LLMs are unreliable at arithmetic. Shell math is deterministic.
 
 ---
 
 ## Edge Cases
 
-### Multiple Items at Same Priority
+**Multiple items at same priority:** Pick the first one in the list.
 
-Pick the first one in the list.
+**Item already implemented:** Search found it exists. Move to Completed, pick next item.
 
-### Item Is Already Implemented
+**Item is blocked:** Specs unclear, dependency missing. Move to Blocked section, document why, pick next unblocked item.
 
-Search found it exists:
-- Move to "Completed" in sprint_plan.md
-- Pick next item
-- Continue
+**No validation command:** Use standard validations (npm run check + Playwright against staging). Note minimal validation in completion entry.
 
-### Item Is Blocked
-
-Specs unclear, dependency missing, etc:
-- Do NOT implement
-- Move to "Blocked" section in sprint_plan.md
-- Document why blocked
-- Pick next unblocked item
-
-### Validation Command Missing
-
-Item in sprint_plan.md has no validation command:
-- Use standard validations: npm run check (local), Playwright against staging (remote)
-- Use best judgment
-- Note in completion entry that validation was minimal
-
-### Tests Unrelated to Your Work Fail
-
-Fix them. If tests fail (even if not your code), you're responsible for getting them green before marking complete.
+**Unrelated tests fail:** Fix them. You own green tests before marking complete.
 
 ---
 
 ## Success Criteria
 
-Building complete when:
-- ✅ ONE item from sprint_plan.md is implemented
-- ✅ TypeScript compiles (`npm run check` passes)
-- ✅ Code committed and pushed to GitLab
-- ✅ Merged to main, deployed to staging
-- ✅ Playwright tests pass against staging
-- ✅ sprint_plan.md is updated (item moved to completed)
-- ✅ RALPH.md updated if new learning
-- ✅ User knows what's next
-- ✅ Code follows specs/ requirements
-- ✅ Code follows stdlib/ patterns
-
-Building fails when:
-- ❌ TypeScript compilation fails
-- ❌ Merge conflicts (human must resolve)
-- ❌ Staging deploy fails
-- ❌ Playwright tests fail against staging (after 2 fix attempts)
-- ❌ Placeholder implementation
-- ❌ Doesn't follow specs/stdlib
-- ❌ Multiple items implemented (violated one-thing rule)
-
----
-
-## Sprint Archiving
-
-When a sprint is complete (all tasks in sprint_plan.md done), archive it for performance tracking and business case building.
-
-### How to Archive
-
-Run the dedicated archiving skill:
-```
-/ralph-archive
-```
-
-This skill will:
-- Validate sprint is complete
-- Extract performance data from sprint_plan.md
-- Generate sprint_summary.md with ROI analysis
-- Archive to sprints/sprint-[N]-[theme]/
-- Create fresh sprint_plan.md for next sprint
-- Update sprints/sprint_history.md index
-
-**Full documentation:** See `/ralph-archive` skill.
-
-### Quick Reference (if running manually):
-
-**1. Create sprint directory:**
-```bash
-mkdir -p sprints/sprint-[number]-[theme]
-```
-
-Example: `sprints/sprint-001-audience-builder-foundation`
-
-**2. Generate sprint_summary.md:**
-
-```markdown
-# Sprint [Number]: [Theme]
-
-**Duration:** [start date] - [end date]
-**Theme:** [one-line description of sprint focus]
-
-## Performance Metrics
-
-- **Tasks completed:** [N]
-- **Total duration:** [X hours Y min]
-- **Total cost:** $[X.XX]
-- **Average per task:** [X.X min] / $[X.XX]
-- **Token usage:** [XXX]K input, [XX]K output
-
-## Business Case Comparison
-
-**Engineer baseline for equivalent work:**
-- **Time:** ~6-8 hours (estimated)
-- **Cost:** $300-400 (loaded rate: $50-75/hr)
-
-**Ralph performance:**
-- **Time:** [actual duration]
-- **Cost:** $[actual cost]
-- **Speed advantage:** [X]x faster
-- **Cost advantage:** [X]% reduction
-
-## Tasks Completed
-
-[Copy entire "Completed" section from sprint_plan.md]
-
-## Technical Learnings
-
-[Copy "Learnings / TODOs" section from sprint_plan.md]
-
-## Blockers Encountered
-
-[List any tasks that blocked during sprint and how resolved]
-
-## Quality Metrics
-
-- **Test pass rate:** [%]
-- **Validation failures:** [count]
-- **Specs clarity score:** [subjective: clear/moderate/vague]
-
-## What Worked Well
-
-- [Observations about what made this sprint successful]
-
-## What to Improve
-
-- [Observations about what slowed progress or caused issues]
-
----
-
-**Generated:** [date] by Ralph
-```
-
-**3. Copy sprint_plan.md:**
-```bash
-cp sprint_plan.md sprints/sprint-[number]-[theme]/sprint_plan.md
-```
-
-**4. Create fresh sprint_plan.md:**
-
-Reset for next sprint:
-```markdown
-# Fix Plan
-
-**Last updated:** [today's date] (fresh sprint started)
-
-**Previous sprint archived:** sprints/sprint-[number]-[theme]/
-
----
-
-## [New Sprint Section]
-
-[New tasks for next sprint]
-
----
-
-## Completed
-
-(empty - fresh start)
-
----
-
-## Sprint Performance Summary
-
-**Sprint:** [new sprint name]
-**Started:** [today]
-**Status:** In Progress
-
-**Completed so far:** 0/[N] tasks
-**Total duration:** 0 min
-**Total cost:** $0.00
-```
-
-**5. Update sprint index:**
-
-If `sprints/README.md` doesn't exist, create it:
-
-```markdown
-# Ralph Sprint Archive
-
-Performance tracking for AI-assisted development sprints.
-
-## Sprints
-
-### Sprint 001: Audience Builder Foundation
-- **Duration:** Jan 20-27, 2026
-- **Tasks:** 8 completed
-- **Performance:** 1h 23m / $2.47
-- **ROI:** 6x faster than manual, 99% cost reduction
-- **Status:** ✅ Complete
-- [View details](./sprint-001-audience-builder-foundation/)
-
-### Sprint 002: [Next Sprint]
-- **Status:** 🚧 In Progress
-```
-
-Update this file after each sprint archive.
-
-### Archive Completion Report
-
-After archiving, report to user:
-
-```
-=== Sprint Archived ===
-
-Sprint: #001 - Audience Builder Foundation
-Duration: Jan 20-27, 2026
-
-Performance:
-- Tasks: 8 completed
-- Time: 1h 23m
-- Cost: $2.47
-- ROI: 6x faster, 99% cost reduction vs. engineer baseline
-
-Archived to:
-- sprints/sprint-001-audience-builder-foundation/
-
-Fresh sprint_plan.md created for next sprint.
-
-Ready to start Sprint #002.
-```
-
----
-
-**Remember:** Implement ONE thing, then stop. Human reviews. Run `/ralph` again to continue. This is intentional.
-
-For unattended execution, use `/ralph-continuous`.
+Complete when:
+- ONE item implemented (not multiple)
+- TypeScript compiles
+- Committed, pushed, merged to main
+- Deployed to staging
+- Playwright tests pass against staging
+- sprint_plan.md updated
+- Code follows specs/ and stdlib/
+- User knows what's next
+
+Fails when:
+- TypeScript won't compile
+- Merge conflicts (human resolves)
+- Staging deploy fails
+- Tests fail after 2 fix attempts
+- Placeholder implementation
+- Multiple items implemented

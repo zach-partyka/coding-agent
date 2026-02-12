@@ -34,8 +34,8 @@ If the user's message contains "Project directory:" followed by a path, use that
     "header": "Project",
     "options": [
       {
-        "label": "/Users/zachpa/Documents/AI/marketing-copilot-coaching",
-        "description": "Marketing Copilot project"
+        "label": "[Your project path]",
+        "description": "Project with sprint_plan.md and RALPH.md"
       },
       {
         "label": "Enter different path",
@@ -71,7 +71,7 @@ Verify these exist:
 Run the bash script:
 
 ```bash
-/Users/zachpa/Documents/AI/ralph-continuous.sh [PROJECT_DIR]
+[path-to-ralph-starter-kit]/scripts/ralph-continuous.sh [PROJECT_DIR]
 ```
 
 The script:
@@ -108,27 +108,42 @@ NO action needed - tracking happens automatically in each `/ralph` invocation. S
 ┌─────────────────────────────────────────┐
 │  Orchestrator Tab                       │
 │  - Spawns new tabs via AppleScript      │
-│  - Waits for marker file                │
+│  - Waits for task-done marker           │
 │  - Tracks progress                      │
 └─────────────────────────────────────────┘
           │
           ▼ (opens new tab)
 ┌─────────────────────────────────────────┐
 │  Task Tab (real TTY!)                   │
-│  - Invokes /ralph for each task         │
-│  - Full interactive Claude UI           │
-│  - Colored diffs, tool calls            │
-│  - Uses Playwright AI agents            │
-│  - Touches marker file on completion    │
-│  - Stays open for review                │
+│  - Wrapper launches background watcher  │
+│  - Claude runs INTERACTIVELY            │
+│  - User can redirect/interrupt mid-task │
+│  - Claude touches claude-done marker    │
+│  - BG watcher: post-processing + timing │
+│  - BG watcher: touches task-done marker │
+│  - Tab stays open for review            │
 └─────────────────────────────────────────┘
 ```
 
+**Signal flow:** Claude finishes → touches `claude-done` → background watcher runs SHELL_WILL_UPDATE replacement + sprint totals → touches `task-done` → orchestrator spawns next tab. Claude stays interactive the whole time so you can redirect if needed.
+
 **Each task runs the base `/ralph` skill, which includes:**
+- Context study (step 3) with **stdlib/testing-patterns.md reference** for UI/API/flow tasks
 - Test requirement detection (step 5.75)
+- **Testing hygiene (step 6.5)** - Update tests inline with UI/API/flow changes
 - Playwright AI test generation (via playwright-test-generator agent)
 - E2E test execution against staging (step 10)
 - Test healing when tests fail (via playwright-test-healer agent)
+
+**Why stdlib/testing-patterns.md matters:**
+- Contains patterns for async data loading, selector robustness, visual validation
+- Prevents known failure modes from previous sprints
+- Read automatically during Step 3 when task involves UI, API, or user flows
+
+**Why Step 6.5 matters:**
+- Prevents test drift (Sprint 10: 39 min to fix 13 tests retroactively)
+- Inline updates are 3x faster than retroactive fixes
+- Ensures tests stay synchronized with implementation
 
 ---
 

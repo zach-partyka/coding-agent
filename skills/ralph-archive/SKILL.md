@@ -1,850 +1,193 @@
 ---
 name: ralph-archive
-description: Archives completed Ralph sprint with performance metrics. Generates sprint_summary.md, copies sprint_plan.md to archive, creates fresh sprint_plan.md, updates sprint_history.md. Use when all tasks in sprint_plan.md are complete and ready to start new sprint.
+description: Archives completed Ralph sprint with performance metrics. Generates sprint_summary.md, copies sprint_plan.md to archive, creates fresh sprint_plan.md, updates sprint_history.md and roadmap.md (with follow-ups and completions). Use when all tasks in sprint_plan.md are complete and ready to start new sprint.
 ---
 
 # Ralph Archive Mode
 
 Archive a completed sprint and prepare for the next one.
 
-**Note:** `/ralph` and `/ralph-continuous` automatically archive when sprint completes. Use this skill only for:
-- Manual archiving (if auto-archive wasn't triggered)
-- Re-archiving (if you want to regenerate sprint_summary.md)
-- Mid-sprint archiving (forced archive before sprint fully complete)
-
-## When to Use
-
-Use this skill when:
-- ✅ Sprint was completed but not auto-archived (edge case)
-- ✅ Want to regenerate sprint_summary.md with updated metrics
-- ✅ Need to archive mid-sprint (partial work, different direction)
-- ✅ Auto-archive failed and you want to retry manually
-
-## What This Does
-
-1. Reads completed `sprint_plan.md` and extracts performance data
-2. Generates comprehensive `sprint_summary.md` with ROI analysis
-3. Archives both files to `sprints/sprint-[N]-[theme]/`
-4. Creates fresh `sprint_plan.md` for next sprint
-5. Updates `sprints/sprint_history.md` index
+`/ralph` and `/ralph-continuous` trigger this automatically when a sprint completes. Use this skill directly only for manual archiving, re-archiving, or mid-sprint archiving.
 
 ## Workflow
 
 ### 1. Get Project Directory
 
-**Check if directory was provided in the prompt first.**
+Check if directory was provided in the prompt. If the user's message contains "Project directory:" followed by a path, use it directly.
 
-If the user's message contains "Project directory:" followed by a path, use that path directly. This allows the skill to be called from scripts/automation.
-
-**If no directory provided, prompt:**
-```
-Which project directory should I archive?
-(Full path to repo with completed sprint_plan.md)
-
-Example: /Users/zachpa/Documents/AI/marketing-copilot-coaching
-```
-
-Use `AskUserQuestion` to collect path only if not already provided.
+If no directory provided, use `AskUserQuestion` to collect the path.
 
 ### 2. Validate Sprint is Complete
 
-Read `sprint_plan.md` and check:
-- ✅ Has "Sprint Performance Summary" section
-- ✅ Has "Completed" section with tasks
-- ✅ All non-blocked tasks are in "Completed"
+Read `sprint_plan.md` and verify:
+- Has "Sprint Performance Summary" section
+- Has "Completed" section with tasks
+- All non-blocked tasks are in "Completed"
 
-**If incomplete sprint:**
-```
-Error: Sprint not ready to archive
-
-Found X uncompleted tasks:
-- Task #Y: [description]
-- Task #Z: [description]
-
-Complete or block these tasks before archiving.
-Or run /ralph to continue working on them.
-```
-
-**If validation fails, STOP.**
+If incomplete, list the uncompleted tasks and stop. Tell user to run `/ralph` to continue or block remaining tasks before archiving.
 
 ### 3. Determine Sprint Number and Theme
 
-**A. Check existing sprints:**
 ```bash
 ls -d sprints/sprint-* 2>/dev/null | wc -l
 ```
 
-This gives the last sprint number. New sprint = last + 1.
+New sprint = last sprint number + 1.
 
-**B. Ask user for sprint theme:**
+Use `AskUserQuestion` to get the sprint theme (2-4 words, lowercase-with-dashes). Theme should answer: "What was the focus of this sprint?"
 
-Use `AskUserQuestion`:
-```
-Sprint [N] is ready to archive!
-
-What theme describes this sprint? (2-4 words, lowercase-with-dashes)
-
-Examples:
-- audience-builder-foundation
-- jira-integration-v2
-- ui-polish-and-testing
-- api-performance-optimization
-```
-
-**C. Confirm sprint details:**
-```
-=== Ready to Archive ===
-
-Sprint Number: [N]
-Sprint Theme: [theme]
-Directory: sprints/sprint-[N]-[theme]
-
-Tasks completed: [X]
-Duration: [Y] min
-Cost: $[Z]
-
-Proceed? (yes/no)
-```
-
-If no, ask for different theme and retry.
+Confirm sprint number, theme, archive directory, task count, duration, and cost before proceeding.
 
 ### 4. Extract Performance Data
 
-From `sprint_plan.md` "Sprint Performance Summary" section, extract:
-- Sprint name
-- Start date
-- Status (should be "Complete" - if not, mark as Complete)
-- Total tasks completed
-- Total duration
-- Total cost
-- Average per task
+From `sprint_plan.md`, extract:
 
-From "Completed" section, extract:
-- List of all completed tasks
-- Performance data per task (if available)
+**Sprint Performance Summary section:** sprint name, start date, status, total tasks, total duration, total cost, average per task, model (if present).
 
-From "Learnings / TODOs" section, extract:
-- Technical learnings
-- Discoveries made during sprint
+**Completed section:** all completed tasks with per-task performance data.
 
-From "Blocked" section (if exists), extract:
-- Tasks that blocked and how resolved
+**Learnings / TODOs section:** technical learnings and discoveries.
+
+**Blocked section (if exists):** tasks that blocked and how they were resolved.
 
 ### 5. Generate sprint_summary.md
 
 Use template from `sprints/sprint_summary.template.md`.
 
-**Calculate business case metrics:**
+Include model in Performance Metrics if it was recorded in sprint_plan.md.
 
-**Engineer baseline:**
-- Time: 6-8 hours (use 7 hours as midpoint)
-- Cost: $300-400 (use $350 as midpoint, based on $50/hr loaded rate)
+**Business case formulas (engineer baseline: 7 hours / $350):**
 
-**Speed advantage:**
 ```
-Speed = (7 hours × 60 min) / [actual duration in minutes]
-Example: (420 min) / (83 min) = 5.1x faster
-```
-
-**Cost advantage:**
-```
+Speed = 420 min / [actual duration]
 Cost reduction % = 100 × (1 - [actual cost] / $350)
-Example: 100 × (1 - $2.47 / $350) = 99.3%
+Savings = $350 - [actual cost]
 ```
 
-**Cost savings:**
-```
-Savings = $350 - [actual cost]
-Example: $350 - $2.47 = $347.53 saved
-```
+Use consistent baseline across sprints for comparison.
 
 **Quality metrics:**
-- Test pass rate: Check if tests passed (if mentioned in tasks)
-- Validation failures: Count from "Blocked" section or task notes
-- Specs clarity: Subjective assessment based on blockers
-  - "Clear" if 0-1 blockers due to unclear specs
-  - "Moderate" if 2-3 blockers due to unclear specs
-  - "Vague" if 4+ blockers due to unclear specs
+- Test pass rate (from task notes)
+- Validation failures (count from Blocked section)
+- Specs clarity: "Clear" (0-1 spec blockers), "Moderate" (2-3), "Vague" (4+)
 
-**What worked well / What to improve:**
+**What worked / What to improve:** Analyze patterns in completion times, blocker types, and rework. Be specific — "Clear specs reduced ambiguity to 1 blocker" not "Good progress this sprint."
 
-Analyze completed tasks and learnings to generate observations.
+**Recommendations:** Generate 3-5 actionable items based on what to improve.
 
-Look for patterns:
-- Did tasks with clear specs complete faster?
-- Did integration tasks block multiple times?
-- Were there repeated tool/framework issues?
-- Did performance improve over course of sprint?
-
-Example observations:
-- "Clear specs in specs/ directory reduced ambiguity"
-- "Integration tasks should be planned earlier (discovered after 8 isolated services)"
-- "Missing test framework decision upfront caused mid-sprint blocker"
-
-**Recommendations for next sprint:**
-
-Based on "What to Improve", generate 3-5 actionable recommendations.
-
-Example:
-- "Define testing strategy before sprint starts (unit vs E2E vs manual)"
-- "Plan integration milestones after every 2-3 services"
-- "Get real data schema/credentials before building data-dependent features"
-
-### 6. Create Archive Directory
+### 6. Write Archive
 
 ```bash
 mkdir -p sprints/sprint-[N]-[theme]
-```
-
-### 7. Copy sprint_plan.md
-
-```bash
 cp sprint_plan.md sprints/sprint-[N]-[theme]/sprint_plan.md
 ```
 
-### 8. Write sprint_summary.md
+Write generated sprint_summary.md to `sprints/sprint-[N]-[theme]/sprint_summary.md`.
 
-Write generated summary to:
+Run the math validator:
+```bash
+node sprints/scripts/validate_sprint_math.cjs sprints/sprint-[N]-[theme]
 ```
-sprints/sprint-[N]-[theme]/sprint_summary.md
-```
 
-### 9. Update sprint_history.md
+Exit code 0: continue. Exit code 1: surface discrepancies as a warning but do not block.
 
-Read existing `sprints/sprint_history.md`.
+### 7. Update sprint_history.md
 
-**Add completed sprint entry:**
+Add a new entry above the previous sprint (reverse chronological order):
 
 ```markdown
 ## Sprint [N]: [Theme]
 
-**Status:** ✅ Complete
-**Duration:** [start date] - [end date]
-**Theme:** [description]
-
-**Performance:**
-- Tasks: [X] completed
-- Duration: [Y] min ([H]h [M]m)
-- Cost: $[Z]
-- ROI: [X]x faster, [X]% cost reduction
+**Status:** Complete
+**Duration:** [start] - [end]
+**Performance:** [X] tasks, [Y] min, $[Z], [ROI]x faster, [cost reduction]%
+**Model:** [if present]
 
 [View details](./sprint-[N]-[theme]/)
 
 ---
 ```
 
-Insert ABOVE the previous sprint entry (reverse chronological order).
+Update the footer with today's date and total sprint count.
 
-**Update archive footer:**
-```markdown
-**Last updated:** [today's date]
-**Total sprints:** [N]
-```
+### 8. Create Fresh sprint_plan.md
 
-### 10. Create Fresh sprint_plan.md
+Before overwriting, extract from the archived sprint:
+- Out of scope items → carry to Backlog
+- Recommendations from sprint_summary.md → carry to Backlog
+- Unresolved learnings → carry to Learnings section
+- Blocked items that couldn't be resolved → carry to Blocked section
 
-**Carry forward from completed sprint:**
+Prioritize carried items (Critical Path → High → Medium → Backlog). Don't dump everything flat.
 
-Before creating fresh file, extract from the archived sprint:
-1. **"Out of Scope" items** → Add to Backlog section
-2. **"Recommendations" from sprint_summary.md** → Add to Backlog section
-3. **Unresolved learnings** (e.g., "JIRA field format unverified") → Add to Learnings section
-4. **Blocked items that couldn't be resolved** → Add to Blocked section
+Write a fresh sprint_plan.md with: previous sprint reference, carried items by priority, empty Completed/Blocked/Learnings sections, and a zeroed Sprint Performance Summary.
 
-**Prioritize backlog items:**
+The old file is already archived in step 6. Overwriting is safe.
 
-Don't just dump everything into flat backlog. Suggest priority based on:
-- **Critical Path:** Items that block other work
-- **High Priority:** Direct user value or regression fixes
-- **Medium Priority:** Improvements, optimizations
-- **Backlog:** Nice-to-have, future exploration
+### 9. Update roadmap.md
 
-Example prioritization:
-```markdown
-## Backlog
+Extract follow-up items from sprint_summary.md (recommendations, improvements, unresolved blockers, out-of-scope items).
 
-**From Sprint 2 Recommendations (prioritize first):**
-- [ ] Add Playwright tests for chat flow (High - prevents regression)
-- [ ] Get PMM feedback on staging (High - user validation)
-- [ ] Instrument ZGAI performance (Medium - optimization)
+For each follow-up:
+1. Check if similar item already exists in roadmap.md (don't duplicate)
+2. Add to appropriate section: **Now** (critical/blocking), **Next** (important, not urgent), **Later** (polish/exploration)
+3. Format with: What, Problem, Acceptance, Considerations, Origin (Sprint N)
 
-**From Sprint 2 Out of Scope (lower priority):**
-- [ ] Document upload UX redesign (Medium)
-- [ ] Brief completion progress UX (Medium)
-```
+Mark completed roadmap items with a checkmark. Update "Last updated" date.
 
-**Template for new sprint_plan.md:**
+If no roadmap.md exists, note it and move on.
 
-```markdown
-# Sprint Plan
+### 10. Update RALPH.md
 
-**Last updated:** [today's date] (fresh sprint started)
+Extract learnings from sprint_summary.md. Add non-obvious, repeatable technical discoveries to RALPH.md under a `Sprint [N]: [Theme]` heading — framework quirks, deployment gotchas, testing patterns, integration lessons.
 
-**Previous sprint archived:** sprints/sprint-[N]-[theme]/
+Skip generic advice, one-off issues, and performance metrics (those belong in sprint_summary.md).
 
-**Sprint Performance Summary (previous):**
-- Sprint [N]: [X] tasks, [Y] min, $[Z], [ROI]x faster
-- [View archive](./sprints/sprint-[N]-[theme]/)
-
----
-
-## [Section for New Work]
-
-**Ralph:** Add new tasks here, or run /ralph-plan to regenerate.
-
-- [ ] Task 1: [description]
-- [ ] Task 2: [description]
-
----
-
-## Completed
-
-(empty - fresh start)
-
----
-
-## Blocked
-
-(empty - fresh start)
-
----
-
-## Learnings / TODOs Ralph Discovers
-
-(empty - fresh start)
-
----
-
-## Notes for Ralph
-
-**This file is regenerable.** If it becomes stale or incorrect:
-1. Delete it
-2. Run /ralph-plan
-3. Ralph will regenerate it by comparing @specs/* against actual implementation
-
----
-
-## Sprint Performance Summary
-
-**Sprint:** [Next Sprint Name/Number]
-**Started:** [today]
-**Status:** In Progress
-
-**Completed so far:** 0/[N] tasks
-**Total duration:** 0 min
-**Total cost:** $0.00
-**Avg per task:** N/A
-
-**Cost comparison:** Engineer baseline ~$300-400 (loaded rate) for 6-8 hours equivalent work
-```
-
-**Write to:** `sprint_plan.md` (overwrites existing file)
-
-**⚠️ IMPORTANT:** The old sprint_plan.md is already archived in step 7. Overwriting is safe.
-
-### 11. Review and Update RALPH.md
-
-**Read sprint_summary.md** (just generated in step 5).
-
-Extract learnings from:
-- "What to Improve" section
-- "Recommendations for Next Sprint" section
-- "Unresolved Blockers" section (if exists)
-
-**Read current RALPH.md** from project root.
-
-**Identify what needs updating:**
-
-Look for learnings that should be documented in RALPH.md:
-
-**Technical discoveries:**
-- New patterns discovered (e.g., "Playwright needs explicit wait for ZGAI streaming")
-- Tool configurations (e.g., "ESLint must disable react-hooks/exhaustive-deps for streaming")
-- Framework quirks (e.g., "Drizzle ORM can't handle JSON columns without explicit cast")
-
-**Process improvements:**
-- What worked (e.g., "Clear specs in specs/ reduced ambiguity")
-- What didn't (e.g., "Integration tasks should be planned earlier")
-- Dependencies to document (e.g., "Need staging credentials before building data features")
-
-**Project-specific patterns:**
-- Testing strategies that worked
-- Deployment gotchas
-- Environment setup requirements
-
-**Don't add:**
-- Generic advice (e.g., "write clear specs") - too obvious
-- One-off issues (e.g., "Task #5 had a typo") - not repeatable
-- Performance metrics - those belong in sprint_summary.md
-
-**Update RALPH.md:**
-
-Add learnings to appropriate sections in RALPH.md:
-
-**If "Learned Lessons" section exists:**
-Add new learnings there with sprint reference:
-```markdown
-## Learned Lessons
-
-### Sprint [N]: [Theme]
-
-**[Category]:**
-- [Learning]: [Description and why it matters]
-- [Learning]: [Description and why it matters]
-
-[Previous sprint learnings continue below...]
-```
-
-**If no "Learned Lessons" section:**
-Create it before the last section (usually "Notes for Ralph"):
-```markdown
----
-
-## Learned Lessons
-
-Document discoveries and patterns from completed sprints.
-
-### Sprint [N]: [Theme]
-
-**[Category]:**
-- [Learning]: [Description]
-
----
-```
-
-**Categories for learnings:**
-- **Testing:** Test framework decisions, patterns that work
-- **Integration:** Service communication, API contracts
-- **Deployment:** Staging/production gotchas
-- **Tools:** Framework quirks, library configurations
-- **Process:** Planning, specs clarity, task sequencing
-
-**Example update:**
-```markdown
-### Sprint 2: Jira Integration
-
-**Testing:**
-- Playwright needs explicit `waitForSelector` for ZGAI streaming responses (streaming completes after initial render)
-
-**Integration:**
-- Plan integration tasks after implementing 2-3 isolated services (discovered need for orchestration after 8 services)
-
-**Process:**
-- Clear specs in specs/ reduced blockers - only 1 ambiguity blocker vs 4 in Sprint 1
-```
-
-**Write updated RALPH.md** back to project root.
-
-**Report what changed:**
-```
-Updated RALPH.md:
-- Added [X] learnings from Sprint [N]
-- Categories: [Testing, Integration, Process, ...]
-```
-
-If no updates needed:
-```
-RALPH.md: No new learnings to add (current instructions still accurate)
-```
-
-### 12. Generate Performance Insights (If 5+ Sprints)
-
-**After updating sprint_history.md, check sprint count:**
+### 11. Performance Insights (5+ Sprints Only)
 
 ```bash
 sprint_count=$(ls -d sprints/sprint-* 2>/dev/null | wc -l)
 ```
 
-**If sprint_count >= 5 AND sprints_since_last_report >= 3:**
+If 5+ sprints exist and 3+ sprints since last insights report:
 
-Parse all sprint_summary.md files and extract:
+Parse all sprint_summary.md files. Analyze sprint size patterns, task duration trends, investigation-first impact, cost performance, and blocker frequency.
 
-- Sprint size (task count)
-- Duration per sprint, per task
-- Cost per sprint, per task
-- Investigation-first sprints vs non-investigation
-- Blocker counts
-- ROI metrics
+Present 3-5 data-backed recommendations to the user. Save detailed report to `sprints/performance_insights.md`.
 
-**Generate inline performance insights:**
+Use `AskUserQuestion` to ask whether to update RALPH.md with performance patterns, let user specify which patterns, just save the report, or skip entirely.
 
-Show user recommendations first, then supporting data:
+Update `.ralph/last_insights_sprint` with current sprint number.
 
-```
-=== Sprint Archived ===
+### 12. Report and Stop
 
-Sprint #[N]: [Theme]
-Duration: [start] - [end]
-Performance: [X] tasks, [Y] min, $[Z], [ROI]x ROI
+Report: sprint number and theme, date range, performance summary (tasks, time, cost, ROI), business case (speed advantage, cost savings), files archived, files updated (sprint_history, roadmap, RALPH.md), and next steps.
 
-Archived to: sprints/sprint-[N]-[theme]/
-
----
-
-📊 PERFORMANCE INSIGHTS ([N] Sprints Analyzed)
-
-**Recommendations Based on Your Data:**
-1. [Recommendation 1 based on patterns]
-2. [Recommendation 2 based on patterns]
-3. [Recommendation 3 based on patterns]
-
-**Supporting Data:**
-
-**Sprint Size Patterns:**
-• Average: [X] tasks per sprint
-• Most common: [range] tasks ([X]% of sprints)
-• Your largest: Sprint [N] ([X] tasks), Sprint [M] ([Y] tasks)
-
-**Task Duration Trends:**
-• Investigation tasks: [X] min (consistent, timeboxed)
-• Implementation tasks: [X] min when investigation-first, [Y] min otherwise
-• Testing tasks: [X] min average
-
-**Investigation-First Impact:**
-• Sprints with investigation tasks: [X] blockers avg (Sprint [list])
-• Sprints without investigation: [Y] blockers avg (Sprint [list])
-• ROI difference: [X]x vs [Y]x
-
-**Cost Performance:**
-• Average: $[X]/sprint, $[Y]/task
-• ROI range: [X]x-[Y]x vs engineer baseline
-• Most efficient: Sprint [N] (investigation-first)
-
-📄 Full report saved to: sprints/performance_insights.md
-
-Would you like me to update RALPH.md with these patterns?
-```
-
-**Use `AskUserQuestion`:**
-
-```json
-{
-  "questions": [{
-    "question": "Update RALPH.md with performance patterns?",
-    "header": "Performance Insights",
-    "options": [
-      {"label": "Yes - Update with recommendations I see", "description": "Add investigation-first, sprint sizing patterns"},
-      {"label": "Let me specify what to add", "description": "I'll tell you which patterns to codify"},
-      {"label": "Just save the report", "description": "Review sprints/performance_insights.md later"},
-      {"label": "Skip entirely", "description": "Not ready to codify yet"}
-    ],
-    "multiSelect": false
-  }]
-}
-```
-
-**Generate detailed report file:**
-
-Write to `sprints/performance_insights.md`:
-
-```markdown
-# Sprint Performance Insights
-
-**Generated:** [date]
-**Data:** Sprints 1-[N] ([N] sprints analyzed)
-
-## Overview
-
-| Metric | Value |
-|--------|-------|
-| Total sprints analyzed | [N] |
-| Total tasks completed | [X] |
-| Total time | ~[X] hours |
-| Total cost | ~$[X] |
-| Average ROI | [X]x vs engineer baseline |
-
-## Sprint Size Analysis
-
-### Distribution
-- **5-8 tasks:** [X] sprints ([X]%)
-  - Sprints: [list]
-  - Average duration: [X] min
-  - Average cost: $[X]
-
-[... detailed breakdown by size ranges ...]
-
-## Investigation-First Impact
-
-### Sprints WITH Investigation Tasks
-
-| Sprint | Tasks | Blockers | ROI | Notes |
-|--------|-------|----------|-----|-------|
-| [N] | [X] | [Y] | [Z]x | [notes] |
-
-[... detailed comparison table ...]
-
-## Task Type Breakdown
-
-| Task Type | Avg Duration | Sample Size | Notes |
-|-----------|--------------|-------------|-------|
-| Investigation | [X] min | [n] tasks | Timeboxed |
-| Implementation (clear) | [X] min | [n] tasks | Investigation-first |
-| Implementation (unclear) | [X] min | [n] tasks | No investigation |
-[... etc ...]
-
-## Recommendations for Sprint Planning
-
-1. [Detailed recommendation 1]
-2. [Detailed recommendation 2]
-3. [Detailed recommendation 3]
-
-[... comprehensive analysis ...]
-```
-
-**If user chooses "Yes - Update with recommendations":**
-
-Add to RALPH.md:
-
-```markdown
-## Sprint Planning Patterns (From [N] Sprints)
-
-**Investigation-First Advantage:**
-- Sprints with investigation tasks have [X]% fewer blockers
-- Implementation tasks [X]% faster when investigation-first
-
-**Optimal Sprint Size:**
-- 8-12 tasks for balanced sprints
-- 15-20 tasks works for investigation-first approach
-
-**Task Sizing:**
-- Investigation: 10 min (timeboxed)
-- Implementation: 5-8 min (clear specs), 10-15 min (unclear)
-- Testing: 13 min avg
-
-Based on [N] completed sprints as of [date].
-```
-
-**If user chooses "Let me specify":**
-
-Ask user which patterns they want to add and add only those.
-
-**If user chooses "Just save the report" or "Skip":**
-
-No RALPH.md updates, just save performance_insights.md.
-
-**Update trigger file:**
-
-Create/update `.ralph/last_insights_sprint` with current sprint number to track when last report was generated.
-
-### 14. Report Completion
-
-```
-=== Sprint Archived ===
-
-Sprint: #[N] - [Theme]
-Duration: [start date] - [end date]
-
-Performance:
-- Tasks: [X] completed
-- Time: [Y] min ([H]h [M]m)
-- Cost: $[Z]
-- ROI: [X]x faster, [X]% cost reduction vs. engineer baseline
-
-Business Case:
-- Speed advantage: [X]x faster delivery
-- Cost savings: $[X] saved vs. $350 engineer baseline
-- Equivalent value: [H] engineer-hours
-
-Archived to:
-- sprints/sprint-[N]-[theme]/sprint_plan.md
-- sprints/sprint-[N]-[theme]/sprint_summary.md
-
-Updated:
-- sprints/sprint_history.md
-- RALPH.md ([X] learnings added)
-
-Fresh sprint_plan.md created for Sprint #[N+1].
-
-Ready to start next sprint!
-Run /ralph-plan to generate plan, or add tasks to sprint_plan.md manually.
-```
-
-### 15. STOP
-
-Archiving is complete. User can now start planning next sprint.
-
----
-
-## Guidelines
-
-### Performance Data Accuracy
-
-**If performance data is missing:**
-
-Some completed tasks in `sprint_plan.md` may not have performance data (duration/tokens/cost).
-
-**For tasks WITHOUT performance data:**
-- Note in sprint_summary.md: "Performance data not tracked for [X] tasks (retroactive tracking not available)"
-- Calculate metrics only from tasks WITH data
-- Mark summary as "Partial data - [X]/[Y] tasks tracked"
-
-**Do NOT make up or estimate missing performance data.**
-
-### Retroactive Performance Tracking
-
-**User asks:** "Can we retroactively add performance data for completed tasks?"
-
-**Answer:** No, not reliably.
-
-Performance data comes from:
-- Task duration (requires knowing when task started/ended)
-- Token counts (from Claude conversation)
-- API costs (calculated from tokens × model pricing)
-
-For tasks completed before performance tracking was added:
-- Duration: Could estimate from git commits, but unreliable (includes thinking time, breaks)
-- Tokens: Not available unless conversation was saved
-- Cost: Could calculate IF tokens known, but without tokens, cannot estimate
-
-**Recommendation:**
-- Start tracking from now forward
-- Note in first sprint summary: "Performance tracking started mid-sprint - partial data only"
-- Future sprints will have complete data
-
-### Sprint Themes
-
-**Good themes:**
-- audience-builder-foundation
-- jira-integration
-- api-performance
-- ui-polish-and-testing
-- hightouch-migration
-- testing-framework-setup
-
-**Bad themes:**
-- stuff (too vague)
-- various-tasks (not descriptive)
-- sprint-1 (use number separately, theme should describe work)
-
-Theme should answer: "What was the focus of this sprint?"
-
-### Business Case Calculations
-
-**Engineer baseline assumptions:**
-- Time: 7 hours (midpoint of 6-8 hour range)
-- Rate: $50-75/hr loaded rate (includes benefits, overhead)
-- Cost: $350 (using $50/hr × 7 hours)
-
-These are ESTIMATES for comparison purposes.
-
-Actual engineer time could vary:
-- Junior engineer: might take longer (8-10 hours)
-- Senior engineer: might be faster (4-6 hours) but higher rate
-- Complex work: could take multiple days
-- Simple work: might be faster
-
-Use consistent baseline across sprints for apple-to-apples comparison.
-
-### Quality Metrics
-
-**Test pass rate:**
-- If all tests passed: 100%
-- If some tests failed but fixed: Calculate from attempts
-- If tests were skipped: Note "N/A - manual validation only"
-
-**Validation failures:**
-- Count from "Blocked" section
-- Include TypeScript errors, test failures, spec conflicts
-- Note how each was resolved
-
-**Specs clarity score:**
-- Subjective assessment based on blockers
-- Look for blockers like "ambiguous requirements", "unclear specs", "need decision"
-
-### What Worked / What to Improve
-
-**Be specific, not generic.**
-
-Bad:
-- "Good progress this sprint"
-- "Some blockers but we overcame them"
-
-Good:
-- "Clear specs in specs/ reduced ambiguity - only 1 blocker due to unclear requirements"
-- "Integration tasks should be planned earlier - discovered 8 isolated services with no orchestration layer"
-
-Look for patterns in:
-- Task completion times (did later tasks get faster as Ralph learned?)
-- Blocker types (specs? tools? credentials?)
-- Rework (which tasks needed significant revision?)
+Then stop. User can now start planning the next sprint with `/ralph-plan`.
 
 ---
 
 ## Edge Cases
 
-### Sprint Has Blockers Still Open
+**Open blockers:** Include unresolved blocked tasks in sprint_summary.md. Carry them forward as first items in fresh sprint_plan.md.
 
-If `sprint_plan.md` has items still in "Blocked" section that couldn't be resolved:
+**Missing performance data:** Calculate metrics only from tasks with data. Note "Partial data — [X]/[Y] tasks tracked" in the summary. Do not fabricate missing data.
 
-**Include in sprint_summary.md:**
-```markdown
-## Unresolved Blockers
-
-Carried forward to next sprint:
-
-- **Task #X:** [description]
-  - Why blocked: [reason]
-  - Needs: [what's required to unblock]
-  - Owner: [who will resolve]
-```
-
-These should be first items in fresh `sprint_plan.md`.
-
-### No Performance Data Available
-
-If sprint was completed before performance tracking was added:
-
-**In sprint_summary.md:**
-```markdown
-## Performance Metrics
-
-⚠️ **Performance tracking was not enabled for this sprint.**
-
-Retroactive estimation is not reliable. Future sprints will track:
-- Duration per task
-- Token usage per task
-- Cost per task
-- ROI vs. engineer baseline
-
----
-
-Tasks completed: [X]
-Estimated duration: [if known from commits/notes]
-Cost: Not tracked
-```
-
-Don't force metrics that don't exist.
-
-### User Wants Different Theme After Archiving
-
-**After archiving is complete:**
-
-User can rename directory:
-```bash
-mv sprints/sprint-[N]-[old-theme] sprints/sprint-[N]-[new-theme]
-```
-
-Then update `sprint_history.md` manually to reflect new theme.
-
-Archive process doesn't need to re-run.
+**User wants different theme after archiving:** Rename the directory and update sprint_history.md manually. No need to re-archive.
 
 ---
 
 ## Success Criteria
 
-Archiving successful when:
-- ✅ `sprint_summary.md` generated with complete data
-- ✅ `sprint_plan.md` archived to sprint directory
-- ✅ Fresh `sprint_plan.md` created for next sprint
-- ✅ `sprint_history.md` updated with new entry
-- ✅ User knows next steps (start planning Sprint N+1)
+Complete when:
+- sprint_summary.md generated with available data
+- sprint_plan.md archived to sprint directory
+- Fresh sprint_plan.md created for next sprint
+- sprint_history.md updated
+- roadmap.md updated (if exists)
+- User knows next steps
 
-Archiving fails when:
-- ❌ Sprint not complete (tasks still pending)
-- ❌ No performance data in sprint_plan.md (note partial data, don't block)
-- ❌ Directory creation fails (permissions issue)
-- ❌ Required files missing (sprint_plan.md, sprint_history.md)
-
----
-
-**Remember:** This skill archives ONE sprint and prepares for the next. It's the transition point between sprints, capturing performance data for business case building.
+Fails when:
+- Sprint not complete (tasks still pending)
+- Directory creation fails
+- Required files missing (sprint_plan.md, sprint_history.md)
