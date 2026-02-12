@@ -2,6 +2,16 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# ─── Cross-platform helpers ─────────────────────────────────────────────────
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  sed_i() { sed -i '' "$@"; }
+  date_fmt() { date -r "$1" "$2"; }
+else
+  sed_i() { sed -i "$@"; }
+  date_fmt() { date -d "@$1" "$2"; }
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Ralph task wrapper - provides clean terminal UI + background post-processing
 # Called by ralph-continuous.sh for each task
 #
@@ -51,7 +61,7 @@ PROJECT_NAME=$(basename "$PROJECT_DIR")
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  Ralph Task #${TASK_NUM}${NC}"
 echo -e "${BLUE}  Project: ${PROJECT_NAME}${NC}"
-echo -e "${BLUE}  Started: $(date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')${NC}"
+echo -e "${BLUE}  Started: $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -328,8 +338,8 @@ echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}  Task Complete${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "  Started:  $(date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
-echo -e "  Ended:    $(date -r "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
+echo -e "  Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
+echo -e "  Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
 echo -e "  Duration: ${TASK_DURATION} min"
 echo -e "  Model:    ${RALPH_MODEL_LABEL}"
 echo -e "  Cost:     \$${COST_EST} (estimated)"

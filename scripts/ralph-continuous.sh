@@ -13,6 +13,22 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# ─── Cross-platform helpers ─────────────────────────────────────────────────
+# macOS uses BSD tools; Windows (Git Bash) and Linux use GNU tools.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  sed_i() { sed -i '' "$@"; }
+  date_fmt() { date -r "$1" "$2"; }  # date_fmt <timestamp> <format>
+else
+  sed_i() { sed -i "$@"; }
+  date_fmt() { date -d "@$1" "$2"; }
+fi
+
+mktemp_dir() {
+  # Use TMPDIR (macOS/Linux) or TEMP (Windows) or /tmp as fallback
+  echo "${TMPDIR:-${TEMP:-/tmp}}"
+}
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Configuration
 RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
 RALPH_MODEL=""  # Model selection (set via prompt or RALPH_MODEL env var)
@@ -201,7 +217,7 @@ spawn_in_terminal() {
   # Capture task start timestamp (shell-enforced)
   local task_start_ts
   task_start_ts=$(date +%s)
-  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
+  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
 
   # Get wrapper script path
   local script_dir
@@ -209,7 +225,7 @@ spawn_in_terminal() {
   local wrapper="${script_dir}/ralph-task-wrapper.sh"
 
   # Create minimal launcher in /tmp to hide verbose command from terminal
-  local launcher="/tmp/ralph-task-${task_num}.sh"
+  local launcher="$(mktemp_dir)/ralph-task-${task_num}.sh"
   cat > "$launcher" << LAUNCHER
 #!/bin/bash
 rm -f "$launcher"
@@ -234,7 +250,7 @@ spawn_in_iterm() {
   # Capture task start timestamp (shell-enforced)
   local task_start_ts
   task_start_ts=$(date +%s)
-  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
+  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
 
   # Get wrapper script path
   local script_dir
@@ -242,7 +258,7 @@ spawn_in_iterm() {
   local wrapper="${script_dir}/ralph-task-wrapper.sh"
 
   # Create minimal launcher (clean terminal output)
-  local launcher="/tmp/ralph-task-${task_num}.sh"
+  local launcher="$(mktemp_dir)/ralph-task-${task_num}.sh"
   cat > "$launcher" <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -289,7 +305,7 @@ spawn_in_windows_terminal() {
   # Capture task start timestamp (shell-enforced)
   local task_start_ts
   task_start_ts=$(date +%s)
-  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
+  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
   
   # Get wrapper script path
   local script_dir
@@ -297,7 +313,7 @@ spawn_in_windows_terminal() {
   local wrapper="${script_dir}/ralph-task-wrapper.sh"
 
   # Create minimal launcher in /tmp to hide verbose command from terminal
-  local launcher="/tmp/ralph-task-${task_num}.sh"
+  local launcher="$(mktemp_dir)/ralph-task-${task_num}.sh"
   cat > "$launcher" << LAUNCHER
 #!/bin/bash
 rm -f "$launcher"
@@ -340,7 +356,7 @@ spawn_inline() {
   # Capture task start timestamp (shell-enforced)
   local task_start_ts
   task_start_ts=$(date +%s)
-  date -r "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
+  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
   
   # Get wrapper script path
   local script_dir

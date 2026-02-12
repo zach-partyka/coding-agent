@@ -8,6 +8,16 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# ─── Cross-platform helpers ─────────────────────────────────────────────────
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  sed_i() { sed -i '' "$@"; }
+  date_fmt() { date -r "$1" "$2"; }
+else
+  sed_i() { sed -i "$@"; }
+  date_fmt() { date -d "@$1" "$2"; }
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Load project configuration
 if [ -f "./ralph.config.sh" ]; then
   source ./ralph.config.sh
@@ -128,7 +138,7 @@ else
   
   # Capture start timestamp (shell-enforced time tracking)
   readonly TASK_START_TS=$(date +%s)
-  echo "✓ Task clocked in: $(date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S') (timestamp: ${TASK_START_TS})"
+  echo "✓ Task clocked in: $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S') (timestamp: ${TASK_START_TS})"
   echo ""
   
   claude --dangerously-skip-permissions "/ralph
@@ -173,8 +183,8 @@ Ralph model: ${RALPH_MODEL_LABEL}"
   echo "═══════════════════════════════════════════════════════════"
   echo "  Task Complete"
   echo "═══════════════════════════════════════════════════════════"
-  echo "Started:  $(date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
-  echo "Ended:    $(date -r "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
+  echo "Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
+  echo "Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
   echo "Duration: ${TASK_DURATION} min"
   echo "Model:    ${RALPH_MODEL_LABEL}"
   echo "Cost:     \$${COST_EST} (estimated)"
@@ -245,18 +255,18 @@ Ralph model: ${RALPH_MODEL_LABEL}"
     
     # 7. Update Sprint Performance Summary
     if [ "$COMPLETED_COUNT" -gt 0 ]; then
-      sed -i '' "s/\*\*Completed:\*\* [0-9~]*\/[0-9?]* tasks/**Completed:** ${COMPLETED_COUNT}\/${TOTAL_TASKS} tasks/" sprint_plan.md
-      sed -i '' "s/\*\*Completed so far:\*\* [0-9~]*\/[0-9?]* tasks/**Completed so far:** ${COMPLETED_COUNT}\/${TOTAL_TASKS} tasks/" sprint_plan.md
-      sed -i '' "s/\*\*Total duration:\*\* [0-9~.]* min/**Total duration:** ${TOTAL_DURATION} min/" sprint_plan.md
+      sed_i "s/\*\*Completed:\*\* [0-9~]*\/[0-9?]* tasks/**Completed:** ${COMPLETED_COUNT}\/${TOTAL_TASKS} tasks/" sprint_plan.md
+      sed_i "s/\*\*Completed so far:\*\* [0-9~]*\/[0-9?]* tasks/**Completed so far:** ${COMPLETED_COUNT}\/${TOTAL_TASKS} tasks/" sprint_plan.md
+      sed_i "s/\*\*Total duration:\*\* [0-9~.]* min/**Total duration:** ${TOTAL_DURATION} min/" sprint_plan.md
       
       if grep -q "\*\*Total cost:\*\*" sprint_plan.md; then
-        sed -i '' "s/\*\*Total cost:\*\* [~]*\\\$[0-9.]*/**Total cost:** \$${TOTAL_COST}/" sprint_plan.md
+        sed_i "s/\*\*Total cost:\*\* [~]*\\\$[0-9.]*/**Total cost:** \$${TOTAL_COST}/" sprint_plan.md
       fi
       
       if grep -q "\*\*Avg per task:\*\* .* min / \\\$" sprint_plan.md; then
-        sed -i '' "s/\*\*Avg per task:\*\* [~]*[0-9]* min \/ \\\$[0-9.]*/**Avg per task:** ${AVG_DURATION} min \/ \$${AVG_COST}/" sprint_plan.md
+        sed_i "s/\*\*Avg per task:\*\* [~]*[0-9]* min \/ \\\$[0-9.]*/**Avg per task:** ${AVG_DURATION} min \/ \$${AVG_COST}/" sprint_plan.md
       elif grep -q "\*\*Avg per task:\*\* .* min" sprint_plan.md; then
-        sed -i '' "s/\*\*Avg per task:\*\* [~]*[0-9]* min/**Avg per task:** ${AVG_DURATION} min \/ \$${AVG_COST}/" sprint_plan.md
+        sed_i "s/\*\*Avg per task:\*\* [~]*[0-9]* min/**Avg per task:** ${AVG_DURATION} min \/ \$${AVG_COST}/" sprint_plan.md
       fi
       
       echo "✓ Sprint totals: ${COMPLETED_COUNT}/${TOTAL_TASKS} tasks, ${TOTAL_DURATION} min, \$${TOTAL_COST}"

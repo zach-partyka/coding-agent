@@ -1,0 +1,104 @@
+# [Project Name] Roadmap
+
+**Last updated:** [date]
+
+This document outlines **what** we're building, **when**, and current **status**. Ralph pulls sprint items from the **Now** section.
+
+---
+
+## Now
+
+**Why:** [What's the current priority and why it matters]
+
+<!-- Items in "Now" are ready to pull into sprints via /ralph-plan.
+     Each item should have: What, Acceptance criteria, Dependencies, and Considerations.
+     The "Considerations" section pre-breaks work into sprint-sized tasks (~10-20 min each). -->
+
+### 1. [Feature/Initiative Name] (High Priority)
+- **What:** [One-sentence description of what to build]
+- **Acceptance:**
+  - [What "done" looks like — specific, testable criteria]
+  - [Another acceptance criterion]
+- **Depends on:** [Other items or external dependencies, or "None"]
+- **Considerations (~N tasks):**
+  1. [INVESTIGATE] [What needs research before implementation?]
+  2. [Implementation task — specific, completable in 10-20 min]
+  3. [Implementation task]
+  4. [Testing/validation task]
+
+### 2. [Feature/Initiative Name] (Medium Priority)
+- **What:** [Description]
+- **Acceptance:**
+  - [Criteria]
+- **Depends on:** [Dependencies]
+- **Considerations (~N tasks):**
+  1. [Task]
+  2. [Task]
+
+### Testing & Quality
+
+**3. [Test/Quality Item]** (Priority)
+- **What:** [Description]
+- **Problem:** [What's the current gap?]
+- **Acceptance:** [What good looks like]
+- **Considerations (~N tasks):**
+  1. [Task]
+
+---
+
+## Next
+
+**Why:** [What becomes important after "Now" is done]
+
+<!-- Items here are scoped but not yet ready for sprints.
+     Move to "Now" when dependencies are met and team is ready. -->
+
+### Product Features
+
+**1. [Feature Name]**
+- **What:** [Description]
+- **Acceptance:** [Criteria]
+- **Considerations (~N tasks):**
+  1. [Task breakdown]
+- **Status:** Planned
+
+### Infrastructure
+
+**2. [Infrastructure Item]**
+- **What:** [Description]
+- **Considerations (~N tasks):**
+  1. [Task breakdown]
+- **Status:** Planning
+
+---
+
+## Later
+
+**Why:** [Why these items are deferred and what conditions would move them up]
+
+<!-- Items here are ideas, explorations, or large efforts that need more scoping.
+     Don't break these into tasks yet — just capture the concept and rough scope. -->
+
+### 1. [Large Initiative]
+- **What:** [Description]
+- **Effort:** Large refactor / Multi-sprint / Research needed
+- **Considerations (~N tasks, large effort):**
+  1. [High-level task breakdown]
+- **Status:** Exploration
+
+### 2. [Future Idea]
+- **What:** [Description]
+- **Status:** Concept
+
+---
+
+## How This Works with Ralph
+
+- **`/ralph-plan`** reads the **Now** section to suggest sprint items
+- Each "Consideration" becomes a sprint task (~10-20 min each)
+- After a sprint, **`/ralph-archive`** flows follow-ups back here:
+  - Completed items get checked off
+  - New discoveries go to Now/Next/Later based on priority
+  - Unresolved blockers carry forward
+- Move items between sections as priorities change
+- Keep "Now" focused: 3-5 active initiatives max

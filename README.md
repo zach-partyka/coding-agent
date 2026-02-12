@@ -6,7 +6,9 @@ AI-powered sprint execution. Define what to build, Ralph implements and deploys 
 
 **With Ralph:** Spec → `claude "/ralph-continuous"` → Review deployed results
 
-**Proven:** 6 sprints, $7.50 vs $1,750 baseline (99%+ savings).
+**Proven:** 20 sprints, ~$7.50 total vs ~$7,000 engineer baseline (99%+ savings).
+
+**Cross-platform:** Works on macOS and Windows (Git Bash).
 
 ---
 
@@ -47,7 +49,7 @@ cd /path/to/your/project
 /path/to/ralph-starter-kit/scripts/setup.sh
 ```
 
-Installs Ralph skills and creates: `ralph.config.sh`, `RALPH.md`, `sprint_plan.md`, `specs/`, `stdlib/`
+Installs Ralph skills and creates: `ralph.config.sh`, `RALPH.md`, `roadmap.md`, `sprint_plan.md`, `specs/`, `stdlib/`, `sprints/`
 
 ### 3. Run
 
@@ -66,7 +68,7 @@ Ralph implements, tests, commits, pushes, deploys, and validates each task.
 ```bash
 claude "/ralph-plan"
 ```
-Generates `sprint_plan.md` from Q&A.
+Pulls items from `roadmap.md` and generates `sprint_plan.md` through Q&A.
 
 **Execute all tasks:**
 ```bash
@@ -176,21 +178,29 @@ export RALPH_WT_PROFILE="YourProfileName"
 your-project/
 ├── ralph.config.sh      # Config: git, staging, tests
 ├── RALPH.md             # Build instructions
-├── sprint_plan.md       # Task list
+├── roadmap.md           # What to build (Now / Next / Later)
+├── sprint_plan.md       # Current sprint tasks
 ├── specs/               # Feature specs
 ├── stdlib/              # Code patterns
-└── sprints/             # Archives
+└── sprints/             # Sprint archives
+    ├── sprint_history.md
+    └── sprint-N-theme/
+        └── sprint_summary.md
 ```
 
-**ralph.config.sh:** Git remote, staging URL, test commands, timeouts
+**ralph.config.sh:** Git remote, staging URL, test commands, timeouts.
 
 **RALPH.md:** Build instructions. Update when patterns change.
 
-**sprint_plan.md:** Tasks Ralph reads. Created by `/ralph-plan`, updated by `/ralph`.
+**roadmap.md:** Product roadmap with Now / Next / Later sections. `/ralph-plan` pulls items from the **Now** section to build sprints. `/ralph-archive` flows follow-ups back here after each sprint.
 
-**specs/:** Requirements, API contracts, edge cases, success criteria
+**sprint_plan.md:** Current sprint tasks. Created by `/ralph-plan`, updated by `/ralph` during execution.
 
-**stdlib/:** Code examples, test patterns, conventions
+**specs/:** Requirements, API contracts, edge cases, success criteria.
+
+**stdlib/:** Code examples, test patterns, conventions.
+
+**sprints/:** Sprint archives. `sprint_history.md` is an index of all completed sprints. Each sprint gets its own folder with a `sprint_summary.md` containing performance metrics, ROI, and learnings. Created automatically by `/ralph-archive`.
 
 ### Tips
 
@@ -204,9 +214,14 @@ your-project/
 - One feature/fix per task
 - Clear success criteria
 
+**Keep your roadmap current:**
+- Add features to `roadmap.md` in the Now / Next / Later sections
+- `/ralph-plan` reads the Now section to suggest sprint items
+- Move items between sections as priorities change
+
 **Run retrospectives:**
-- `/ralph-archive` reviews sprint and updates RALPH.md with learnings
-- Documents mistakes, quirks, and patterns discovered
+- `/ralph-archive` archives the sprint, generates a summary with ROI metrics, and updates RALPH.md with learnings
+- Follow-ups flow back to `roadmap.md` automatically
 - Keeps build instructions current
 
 ---

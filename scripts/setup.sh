@@ -337,12 +337,25 @@ if [ ! -f "$PROJECT_DIR/RALPH.md" ]; then
   echo "✓ Created RALPH.md (customize for your project)"
 fi
 
+# Create roadmap.md from template
+if [ ! -f "$PROJECT_DIR/roadmap.md" ]; then
+  echo "Creating roadmap.md..."
+  cp "$STARTER_KIT_DIR/template/roadmap.md.template" "$PROJECT_DIR/roadmap.md"
+  echo "✓ Created roadmap.md (add your Now/Next/Later items)"
+fi
+
 # Create directories
 echo "Creating directories..."
 mkdir -p "$PROJECT_DIR/specs"
 mkdir -p "$PROJECT_DIR/stdlib"
 mkdir -p "$PROJECT_DIR/sprints"
 echo "✓ Created specs/, stdlib/, sprints/"
+
+# Copy sprint templates
+if [ ! -f "$PROJECT_DIR/sprints/sprint_history.md" ]; then
+  cp "$STARTER_KIT_DIR/template/sprints/sprint_history.md" "$PROJECT_DIR/sprints/sprint_history.md"
+  echo "✓ Created sprints/sprint_history.md"
+fi
 
 # Generate examples if requested
 if [ "$GEN_EXAMPLES" == "y" ]; then
@@ -375,10 +388,11 @@ echo "Files created:"
 echo "  ✓ ralph.sh (launcher)"
 echo "  ✓ ralph.config.sh (configuration)"
 echo "  ✓ RALPH.md (build instructions)"
+echo "  ✓ roadmap.md (product roadmap — Now/Next/Later)"
 echo "  ✓ sprint_plan.md (sprint tracker)"
 echo "  ✓ specs/ (feature specifications)"
 echo "  ✓ stdlib/ (technical patterns)"
-echo "  ✓ sprints/ (archive directory)"
+echo "  ✓ sprints/ (sprint archives + history)"
 echo "  ✓ ralph-continuous.sh available at $GLOBAL_RALPH_DIR/"
 echo ""
 
@@ -451,9 +465,10 @@ echo ""
 echo "=== Next Steps ==="
 echo ""
 echo "1. Customize RALPH.md with your project's build/test instructions"
-echo "2. Add specs to specs/ directory"
-echo "3. Add technical patterns to stdlib/ directory"
-echo "4. Run your first sprint:"
+echo "2. Add items to roadmap.md (Now section = ready for sprints)"
+echo "3. Add specs to specs/ directory"
+echo "4. Add technical patterns to stdlib/ directory"
+echo "5. Run your first sprint:"
 echo ""
 echo "   Option A (with hotkey): Press Shift+Cmd+R"
 echo "   Option B (command):     claude \"/ralph-plan\""

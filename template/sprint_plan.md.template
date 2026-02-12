@@ -1,48 +1,60 @@
-# Sprint Plan
+# Sprint [N]: [Theme/Goal]
 
-## Active Sprint
+**Last updated:** [date]
 
-### Sprint Goals
-[What are you trying to accomplish this sprint? 1-3 high-level goals]
+## Goal
+[One sentence describing what success looks like]
 
-### Tasks
+## Tasks
 
-#### Backlog (not started)
-- [ ] [Task description - be specific about what done looks like]
-- [ ] [Task description]
+### Critical Path
+<!-- Tasks that must complete in order. Ralph executes top-to-bottom. -->
 
-#### In Progress
-- [ ] [Task currently being worked on]
+1. [#1] [Task name] - [Brief description]
+   - Acceptance: [What "done" looks like]
+   - Files: [Likely files to touch]
 
-#### Completed
-- [x] [Completed task with brief note if helpful]
-
-#### Blocked
-- [ ] **BLOCKED:** [Task description] - [Blocker description and what's needed to unblock]
-
-## Backlog (Future Sprints)
+2. [#2] [Task name] - depends on #1
+   - Acceptance: [What "done" looks like]
 
 ### High Priority
-- [ ] [Task that should be next sprint]
+<!-- Independent tasks that can execute in any order. -->
 
-### Medium Priority
-- [ ] [Task for future consideration]
+3. [#3] [Task name] - [Brief description]
+   - Acceptance: [What "done" looks like]
 
-### Low Priority / Ideas
-- [ ] [Nice-to-have or exploratory task]
+### Investigation Tasks
+<!-- Investigation-only: document findings, don't implement. Timebox 10-15 min. -->
+
+[INVESTIGATE] [#N] [Investigation name] - [What we need to learn]
+   - Questions to answer: [Specific questions]
+   - After investigation: Add implementation tasks to sprint
+   - Max time: 15 min
+
+## Blocked
+<!-- Tasks move here when blocked. Include reason and what's needed to unblock. -->
+
+(empty)
+
+## Completed
+<!-- Tasks move here when done. Include performance data. -->
+
+(empty)
 
 ## Notes
+- [Context or decisions from planning]
 
-**Timestamp Tracking (MANDATORY):**
-- Every task MUST have start timestamp captured with `date +%s`
-- Every completed task MUST show end timestamp and calculated duration
-- NO estimates allowed ("~10 min" is invalid)
-- Format: `Duration: 8 min (calculated: (end - start) / 60)`
-- Verification: grep for "Start timestamp" in completed tasks
-- This is required for accurate ROI metrics and business case
+---
 
-[Any additional context, decisions, or reminders for this sprint]
+## Sprint Performance Summary
 
-## Sprint History
+**Sprint:** [N]
+**Started:** [date]
+**Status:** In Progress
 
-See `sprints/` directory for completed sprint archives.
+**Completed so far:** 0/[N] tasks
+**Total duration:** 0 min
+**Total cost:** $0.00
+**Avg per task:** N/A
+
+**Cost comparison:** Engineer baseline ~$350 (loaded rate) for 7 hours equivalent work
