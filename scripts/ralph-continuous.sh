@@ -13,31 +13,18 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# ─── Cross-platform helpers ─────────────────────────────────────────────────
-# macOS uses BSD tools; Windows (Git Bash) and Linux use GNU tools.
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  sed_i() { sed -i '' "$@"; }
-  date_fmt() { date -r "$1" "$2"; }  # date_fmt <timestamp> <format>
-else
-  sed_i() { sed -i "$@"; }
-  date_fmt() { date -d "@$1" "$2"; }
-fi
-
-mktemp_dir() {
-  # Use TMPDIR (macOS/Linux) or TEMP (Windows) or /tmp as fallback
-  echo "${TMPDIR:-${TEMP:-/tmp}}"
-}
-# ─────────────────────────────────────────────────────────────────────────────
-
 # Configuration
 RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
 RALPH_MODEL=""  # Model selection (set via prompt or RALPH_MODEL env var)
 
-# Check for --inline flag (forces inline mode, no external terminal spawning)
+# Parse args in one pass: --inline flag and project directory
 FORCE_INLINE=false
+PROJECT_ARG=""
 for arg in "$@"; do
   if [ "$arg" = "--inline" ]; then
     FORCE_INLINE=true
+  elif [ -z "$PROJECT_ARG" ]; then
+    PROJECT_ARG="$arg"
   fi
 done
 
@@ -47,15 +34,6 @@ readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
-
-# Get project directory (filter out --inline flag)
-PROJECT_ARG=""
-for arg in "$@"; do
-  if [ "$arg" != "--inline" ]; then
-    PROJECT_ARG="$arg"
-    break
-  fi
-done
 
 # Prompt for directory if not provided
 if [ -z "$PROJECT_ARG" ]; then
@@ -123,52 +101,47 @@ check_tasks_remain() {
   if [ -f "$MARKER_DIR/sprint-complete" ]; then
     return 1  # No tasks remain
   fi
-  
+
   # Check for sprint-level BLOCKED status (all remaining work blocked)
   if grep -qE "^\*\*Sprint Status:\*\*\s*BLOCKED" "$FIX_PLAN" 2>/dev/null; then
     return 1  # Sprint blocked - no unblocked tasks remain
   fi
 
-  # Check for unchecked task boxes that are NOT blocked: - [ ] **#N** ... 
+  # Content before "## Completed" (one read for all remaining checks)
+  local completed_line content
+  completed_line=$(grep -n "^## Completed" "$FIX_PLAN" 2>/dev/null | head -1 | cut -d: -f1)
+  if [ -n "$completed_line" ]; then
+    content=$(head -n "$((completed_line - 1))" "$FIX_PLAN" 2>/dev/null)
+  else
+    content=$(cat "$FIX_PLAN")
+  fi
+
+  # Check for unchecked task boxes that are NOT blocked: - [ ] **#N** ... (anywhere in file)
   if grep -E "^\s*-\s*\[ \]" "$FIX_PLAN" 2>/dev/null | grep -qvE "BLOCKED"; then
     return 0  # Found unblocked unchecked tasks
   fi
 
   # Check for numbered tasks not in Completed section AND not BLOCKED
-  if grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\].*" "$FIX_PLAN" 2>/dev/null; then
-    local completed_line=$(grep -n "^## Completed" "$FIX_PLAN" | head -1 | cut -d: -f1)
-    local blocked_line=$(grep -n "^## Blocked" "$FIX_PLAN" | head -1 | cut -d: -f1)
-    
-    # Check for unblocked, uncompleted tasks
-    if [ -z "$completed_line" ]; then
-      # No completed section yet, check for non-blocked tasks
-      if grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\].*" "$FIX_PLAN" | grep -vE "BLOCKED"; then
-        return 0
-      fi
-    else
-      # Check tasks before Completed section that aren't blocked
-      if head -n "$completed_line" "$FIX_PLAN" | grep -E "^\s*[0-9]+\.\s*\[#[0-9]+\]" | grep -qvE "BLOCKED"; then
-        return 0
-      fi
+  if echo "$content" | grep -qE "^\s*[0-9]+\.\s*\[#[0-9]+\].*" 2>/dev/null; then
+    if echo "$content" | grep -E "^\s*[0-9]+\.\s*\[#[0-9]+\]" | grep -qvE "BLOCKED"; then
+      return 0
     fi
   fi
 
   # Check for any line with "IN PROGRESS" (active tasks) but not BLOCKED
-  if grep -qiE "IN PROGRESS" "$FIX_PLAN" 2>/dev/null; then
-    # But not if it's in the Completed section or marked as BLOCKED
-    local completed_line=$(grep -n "^## Completed" "$FIX_PLAN" | head -1 | cut -d: -f1)
-    if [ -z "$completed_line" ]; then
-      if head -n 999999 "$FIX_PLAN" | grep -iE "IN PROGRESS" | grep -qvE "BLOCKED"; then
-        return 0
-      fi
-    else
-      if head -n "$completed_line" "$FIX_PLAN" | grep -iE "IN PROGRESS" | grep -qvE "BLOCKED"; then
-        return 0
-      fi
+  if echo "$content" | grep -qiE "IN PROGRESS" 2>/dev/null; then
+    if echo "$content" | grep -iE "IN PROGRESS" | grep -qvE "BLOCKED"; then
+      return 0
     fi
   fi
 
   return 1
+}
+
+# Set PROJECT_NAME and SPRINT_NAME for banner output (call before printing sprint banners)
+get_sprint_display_info() {
+  PROJECT_NAME=$(basename "$PROJECT_DIR")
+  SPRINT_NAME=$(grep -E "^#\s*Sprint\s+[0-9]+" "$FIX_PLAN" 2>/dev/null | head -1 | sed 's/^#\s*//' || echo "Current Sprint")
 }
 
 check_blocked() {
@@ -209,31 +182,29 @@ detect_terminal() {
   fi
 }
 
+# Set task env used by all spawn_* functions: TASK_START_TS, SCRIPT_DIR, WRAPPER, start marker
+prepare_task_env() {
+  local task_num=$1
+  TASK_START_TS=$(date +%s)
+  date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  WRAPPER="$SCRIPT_DIR/ralph-task-wrapper.sh"
+}
+
 # Spawn Claude in a new terminal window (macOS Terminal.app)
 # Uses 'do script' without keystroke to avoid accessibility permission requirements
 spawn_in_terminal() {
   local task_num=$1
+  prepare_task_env "$task_num"
 
-  # Capture task start timestamp (shell-enforced)
-  local task_start_ts
-  task_start_ts=$(date +%s)
-  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
-
-  # Get wrapper script path
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="${script_dir}/ralph-task-wrapper.sh"
-
-  # Create minimal launcher in /tmp to hide verbose command from terminal
-  local launcher="$(mktemp_dir)/ralph-task-${task_num}.sh"
+  local launcher="/tmp/ralph-task-${task_num}.sh"
   cat > "$launcher" << LAUNCHER
 #!/bin/bash
 rm -f "$launcher"
-exec "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+exec "$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
 LAUNCHER
   chmod +x "$launcher"
 
-  # 'do script' without 'in window' opens a new window
   osascript <<EOF
 tell application "Terminal"
   activate
@@ -246,26 +217,16 @@ EOF
 # Uses 'create window' to avoid accessibility permission requirements
 spawn_in_iterm() {
   local task_num=$1
+  prepare_task_env "$task_num"
 
-  # Capture task start timestamp (shell-enforced)
-  local task_start_ts
-  task_start_ts=$(date +%s)
-  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
-
-  # Get wrapper script path
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="${script_dir}/ralph-task-wrapper.sh"
-
-  # Create minimal launcher (clean terminal output)
-  local launcher="$(mktemp_dir)/ralph-task-${task_num}.sh"
+  local launcher="/tmp/ralph-task-${task_num}.sh"
   cat > "$launcher" <<EOF
 #!/bin/bash
 set -euo pipefail
 rm -f "$launcher"
 
 # Run wrapper (no extra startup chatter)
-"$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+"$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
 WRAPPER_EXIT=\$?
 
 if [ \$WRAPPER_EXIT -ne 0 ]; then
@@ -277,7 +238,6 @@ exit \$WRAPPER_EXIT
 EOF
   chmod +x "$launcher"
 
-  # Use write text so tab stays open after script exits
   osascript <<EOF
 tell application "iTerm"
   activate
@@ -301,27 +261,16 @@ EOF
 # Spawn Claude in a new Windows Terminal tab
 spawn_in_windows_terminal() {
   local task_num=$1
-  
-  # Capture task start timestamp (shell-enforced)
-  local task_start_ts
-  task_start_ts=$(date +%s)
-  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
-  
-  # Get wrapper script path
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="${script_dir}/ralph-task-wrapper.sh"
+  prepare_task_env "$task_num"
 
-  # Create minimal launcher in /tmp to hide verbose command from terminal
-  local launcher="$(mktemp_dir)/ralph-task-${task_num}.sh"
+  local launcher="/tmp/ralph-task-${task_num}.sh"
   cat > "$launcher" << LAUNCHER
 #!/bin/bash
 rm -f "$launcher"
-exec "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+exec "$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
 LAUNCHER
   chmod +x "$launcher"
 
-  # Spawn tab - wt.exe will error if profile doesn't exist
   if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$launcher" 2>/dev/null; then
     return 0
   else
@@ -352,19 +301,8 @@ Implement ONE task from sprint_plan.md, then signal completion."
 # Spawn inline (true fallback - no TTY benefits)
 spawn_inline() {
   local task_num=$1
-  
-  # Capture task start timestamp (shell-enforced)
-  local task_start_ts
-  task_start_ts=$(date +%s)
-  date_fmt "$task_start_ts" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
-  
-  # Get wrapper script path
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local wrapper="${script_dir}/ralph-task-wrapper.sh"
-  
-  # Call wrapper script directly (pass model as 5th arg)
-  "$wrapper" "$task_num" "$PROJECT_DIR" "$task_start_ts" "$MARKER_DIR" "$RALPH_MODEL"
+  prepare_task_env "$task_num"
+  "$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
 }
 
 # Wait for task completion via marker file, then close the terminal
@@ -516,10 +454,7 @@ while true; do
   if check_blocked; then
     # Tasks are blocked - check if ALL remaining tasks are blocked
     if ! check_tasks_remain; then
-      # Extract sprint name from sprint_plan.md
-      PROJECT_NAME=$(basename "$PROJECT_DIR")
-      SPRINT_NAME=$(grep -E "^#\s*Sprint\s+[0-9]+" "$FIX_PLAN" | head -1 | sed 's/^#\s*//' || echo "Current Sprint")
-      
+      get_sprint_display_info
       echo ""
       echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
       echo -e "${YELLOW}  Sprint Blocked: ${SPRINT_NAME}${NC}"
@@ -541,10 +476,7 @@ while true; do
   fi
   
   if ! check_tasks_remain; then
-    # Extract sprint name from sprint_plan.md
-    PROJECT_NAME=$(basename "$PROJECT_DIR")
-    SPRINT_NAME=$(grep -E "^#\s*Sprint\s+[0-9]+" "$FIX_PLAN" | head -1 | sed 's/^#\s*//' || echo "Current Sprint")
-    
+    get_sprint_display_info
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}  All tasks complete: ${SPRINT_NAME}${NC}"
@@ -614,9 +546,6 @@ while true; do
         echo "ℹ️  Running in inline mode - tasks will execute sequentially in this window."
         spawn_inline $TASK_COUNT
       fi
-      ;;
-    "pty")
-      spawn_with_pty $TASK_COUNT
       ;;
     *)
       echo "ℹ️  Terminal tab spawning not available in this environment"
