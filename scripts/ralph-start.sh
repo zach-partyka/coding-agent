@@ -24,7 +24,7 @@ if [ -f "$SELECTION_FILE" ]; then
     echo ""
     echo "Starting Ralph Continuous for: $PROJECT_DIR"
     echo ""
-    # Run the main script which spawns fresh Claude sessions per task
+    # Run the main script (same directory as this script)
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     "$SCRIPT_DIR/ralph-continuous.sh" "$PROJECT_DIR"
   else
