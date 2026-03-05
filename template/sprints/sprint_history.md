@@ -14,7 +14,8 @@ Performance tracking for AI-assisted development sprints.
 **Status:** Complete
 **Duration:** [start] - [end]
 **Performance:** [X] tasks, [Y] min, $[Z], [ROI]x faster, [cost]% cost reduction
-**Model:** [e.g. Sonnet 4.5, Opus 4.6]
+**Main model:** [e.g. Opus 4.6]
+**Sub models:** [e.g. Sonnet 4.6, Haiku 4.5 — omit if single-model sprint]
 
 [View details](./sprint-1-[theme]/)
 

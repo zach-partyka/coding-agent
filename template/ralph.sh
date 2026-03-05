@@ -127,9 +127,9 @@ else
   case "${RALPH_MODEL:-default}" in
     opus)       RALPH_MODEL_LABEL="Opus 4.6" ;;
     opus-1m)    RALPH_MODEL_LABEL="Opus 4.6 (1M)" ;;
-    sonnet-1m)  RALPH_MODEL_LABEL="Sonnet 4.5 (1M)" ;;
+    sonnet-1m)  RALPH_MODEL_LABEL="Sonnet 4.6 (1M)" ;;
     haiku)      RALPH_MODEL_LABEL="Haiku 4.5" ;;
-    *)          RALPH_MODEL_LABEL="Sonnet 4.5 (default)" ;;
+    *)          RALPH_MODEL_LABEL="Sonnet 4.6 (default)" ;;
   esac
   if [ -n "$RALPH_MODEL" ]; then
     echo "Model: $RALPH_MODEL_LABEL"
@@ -158,7 +158,7 @@ Ralph model: ${RALPH_MODEL_LABEL}"
   # Calculate cost estimate based on model and duration
   # Same pricing as ralph-task-wrapper.sh for consistency:
   # - Opus 4.6: ~$0.05/min
-  # - Sonnet 4.5: ~$0.03/min
+  # - Sonnet 4.6: ~$0.03/min
   # - Haiku 4.5: ~$0.01/min
   case "${RALPH_MODEL:-default}" in
     opus)       COST_PER_MIN="0.05" ;;

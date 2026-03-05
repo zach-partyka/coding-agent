@@ -391,17 +391,17 @@ echo ""
 if [ -z "$RALPH_MODEL" ]; then
   echo -e "${BLUE}Which model should Ralph use?${NC}"
   echo ""
-  echo -e "  ${GREEN}1${NC}) Default (Sonnet 4.5) - \$3/\$15 per Mtok - good for most tasks"
+  echo -e "  ${GREEN}1${NC}) Default (Sonnet 4.6) - \$3/\$15 per Mtok - good for most tasks"
   echo -e "  ${GREEN}2${NC}) opus - Opus 4.6 - \$5/\$25 per Mtok - most capable"
   echo -e "  ${GREEN}3${NC}) opus-1m - Opus 4.6 (1M context) - \$10/\$37.50 per Mtok"
-  echo -e "  ${GREEN}4${NC}) sonnet-1m - Sonnet 4.5 (1M context) - \$6/\$22.50 per Mtok"
+  echo -e "  ${GREEN}4${NC}) sonnet-1m - Sonnet 4.6 (1M context) - \$6/\$22.50 per Mtok"
   echo -e "  ${GREEN}5${NC}) haiku - Haiku 4.5 - \$1/\$5 per Mtok - fastest"
   echo ""
   read -p "Select [1-5]: " model_selection
   
   case $model_selection in
     1|"")
-      RALPH_MODEL=""
+      RALPH_MODEL="sonnet"
       ;;
     2)
       RALPH_MODEL="opus"

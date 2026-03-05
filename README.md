@@ -1,235 +1,231 @@
-# Ralph Starter Kit
+# Ralph
 
-AI-powered sprint execution. Define what to build, Ralph implements and deploys it, you review results.
+Ralph is an AI agent that builds software for you. You describe what you want, Ralph implements it, deploys it, and lets you review the live result.
 
-**Without Ralph:** Spec → Code → Test → Debug → Commit → Push → Deploy → Test → Fix → Repeat
+**The old way:** Write a spec, hand it to engineering, wait for a sprint, get it back, give feedback, wait again.
 
-**With Ralph:** Spec → `claude "/ralph-continuous"` → Review deployed results
+**With Ralph:** Describe what you want → Ralph builds and deploys it → you review the live result. One sitting.
 
-**Proven:** 20 sprints, ~$7.50 total vs ~$7,000 engineer baseline (99%+ savings).
-
-**Cross-platform:** Works on macOS and Windows (Git Bash).
+Ralph has run 36+ sprints on a real production app (Marketing Copilot), averaging ~$0.35 per sprint in AI costs.
 
 ---
 
-## Prerequisites
+## How it works
 
-**Windows:**
-- Git Bash ([download](https://git-scm.com/download/win))
-- Windows Terminal ([download](https://aka.ms/terminal)) - optional
-  - Without: Sequential execution in current window
-  - With: Parallel execution in new tabs (faster, better visibility)
+Ralph operates in a simple cycle:
 
-**Mac:**
-- Terminal.app (built-in) or iTerm2 (recommended)
-  - Terminal.app: Opens new windows per task (clutters screen)
-  - iTerm2: Opens new tabs in same window (cleaner)
+1. **Plan** — You tell Ralph what to build (a roadmap item, a bug fix, a new feature). Ralph turns it into a sprint plan with small, concrete tasks.
+2. **Build** — Ralph works through each task: writes the code, runs tests, pushes it live to your staging environment, and verifies it works.
+3. **Review** — You open your staging site in a browser and check the result. If something needs adjusting, you tell Ralph and it fixes it.
 
-**Everyone:**
-- Claude Code CLI (`claude --version` works)
-- Git repository with HTTPS remote
-
-> **Windows:** Use Git Bash for all commands, not PowerShell/CMD.
+You interact with Ralph through a terminal (the black window where you type commands). Ralph handles the rest — git, deployments, testing — so you don't need to know those systems.
 
 ---
 
-## Quick Start
+## What you need before starting
 
-### 1. Clone
+### 1. A Mac (or Windows PC)
 
+Ralph works on both. Mac is simpler to set up.
+
+### 2. Claude Code
+
+This is the AI tool that powers Ralph. It runs in your terminal.
+
+**To check if you have it:** Open Terminal (on Mac: search "Terminal" in Spotlight), type `claude --version`, and press Enter. If you see a version number, you're set.
+
+**To get it at Zillow:** Submit a [ServiceNow request](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9). Once approved, follow the install instructions they send you.
+
+### 3. A project to use it on
+
+Ralph works on existing codebases that have:
+- Source code in a git repository (ask your team's engineer — they'll know)
+- A staging environment where code auto-deploys when pushed (most Zillow apps have this)
+
+If you're not sure whether your project qualifies, ask Zach (zpartyka@zillow.com) — happy to help figure it out.
+
+### 4. The Ralph starter kit (this folder)
+
+If you're reading this, you probably already have it. If not:
+
+**On Mac**, open Terminal and run:
 ```bash
-git clone https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit.git
-cd ralph-starter-kit
+git clone https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit.git ~/Documents/ralph-starter-kit
 ```
 
-### 2. Setup
-
-```bash
-cd /path/to/your/project
-/path/to/ralph-starter-kit/scripts/setup.sh
-```
-
-Installs Ralph skills and creates: `ralph.config.sh`, `RALPH.md`, `roadmap.md`, `sprint_plan.md`, `specs/`, `stdlib/`, `sprints/`
-
-### 3. Run
-
-```bash
-claude "/ralph-plan"        # Plan sprint
-claude "/ralph-continuous"  # Execute sprint
-```
-
-Ralph implements, tests, commits, pushes, deploys, and validates each task.
+**If `git clone` doesn't work**, you may need to set up GitLab access first. Ask your team lead or check the [Zillow GitLab docs](https://gitlab.zgtools.net).
 
 ---
 
-## How to Use
+## Setting up Ralph on your project
 
-**Plan:**
+Once you have everything above, the setup takes about 5 minutes.
+
+**Step 1:** Open Terminal and navigate to your project folder:
+```bash
+cd ~/path/to/your/project
+```
+(Replace with the actual path. If you're not sure, ask the engineer on your team where the code lives.)
+
+**Step 2:** Run the setup script:
+```bash
+~/Documents/ralph-starter-kit/scripts/setup.sh
+```
+(Adjust the path if you put the starter kit somewhere else.)
+
+The script will ask you a few questions about your project — staging URL, what language the code is in, etc. It auto-detects most things. When in doubt, press Enter to accept the defaults.
+
+**What setup creates:**
+
+| File | What it's for |
+|------|---------------|
+| `roadmap.md` | Your product backlog — what you want to build, organized by priority |
+| `sprint_plan.md` | The current sprint — tasks Ralph is working on right now |
+| `RALPH.md` | Build instructions — how to run and test your specific project |
+| `ralph.config.sh` | Configuration — your staging URL, git settings, test commands |
+| `specs/` | Detailed requirements for features (you write these, Ralph follows them) |
+| `stdlib/` | Code patterns your project follows (Ralph stays consistent with these) |
+| `sprints/` | Archive of completed sprints with performance data |
+
+---
+
+## Running your first sprint
+
+### Plan it
+
 ```bash
 claude "/ralph-plan"
 ```
-Pulls items from `roadmap.md` and generates `sprint_plan.md` through Q&A.
 
-**Execute all tasks:**
+Ralph reads your `roadmap.md` and walks you through building a sprint plan. It asks what you want to focus on, suggests task breakdowns, and writes `sprint_plan.md` when you're happy with it.
+
+**Tip:** Start small. 3–5 tasks for your first sprint. You can always run another.
+
+### Run it
+
 ```bash
 claude "/ralph-continuous"
 ```
-Opens each task in new terminal tab. Watch progress live.
 
-**Execute one task:**
+Ralph opens a new terminal tab for each task and works through them one at a time. You'll see it:
+
+- Reading your code to understand what to change
+- Writing new code or modifying existing files
+- Running tests to make sure nothing broke
+- Pushing the changes live to your staging site
+- Verifying the deployment worked
+
+Each task typically takes 5–20 minutes. A 5-task sprint usually finishes in about an hour.
+
+**While it's running,** you can switch between terminal tabs to watch any task. You don't need to do anything — just watch if you're curious, or go do other work and come back.
+
+**To stop it,** press `Ctrl+C` in any task tab. Ralph stops cleanly.
+
+### Review it
+
+When the sprint finishes, open your staging site in a browser and check the changes.
+
+**Important:** Always visually verify UI changes. Ralph's tests can pass even when something looks wrong on screen. A quick eye-check catches things automated tests miss.
+
+### One task at a time (alternative)
+
+If you'd rather go task-by-task instead of running the whole sprint:
+
 ```bash
 claude "/ralph"
 ```
-Implements one task, stops. Good for testing.
 
-**Per-task workflow:**
-1. Create git branch
-2. Implement (follows `specs/` and `stdlib/`)
-3. Run local tests
-4. Commit and push
-5. Wait for staging deployment
-6. Run integration tests
-7. Update `sprint_plan.md`
+Ralph implements one task, then stops and waits for you. Good for your first time, or when you want tighter control.
 
 ---
 
-## Examples
+## Day-to-day workflow
 
-**Try it:**
+Once you're set up, the rhythm is:
+
+1. **Update your roadmap** — Add ideas, features, and fixes to `roadmap.md` in the Now / Next / Later sections.
+2. **Plan a sprint** — Run `claude "/ralph-plan"` when you're ready to build something. Ralph pulls from the "Now" section.
+3. **Run the sprint** — `claude "/ralph-continuous"` and let it go.
+4. **Review results** — Check staging, give feedback, note anything that needs adjustment.
+5. **Archive** — When a sprint is done, Ralph archives it (performance data, learnings) and carries follow-ups into your roadmap.
+
+A sprint takes about an hour. You can run multiple sprints in a day if you want.
+
+---
+
+## Writing good specs
+
+Ralph is only as good as what you tell it to build. The key files you'll edit:
+
+### `roadmap.md` — What to build
+
+Organized into three sections:
+- **Now** — Things Ralph should build in the next sprint
+- **Next** — Coming soon but not yet
+- **Later** — Ideas and future work
+
+Ralph reads the "Now" section during planning.
+
+### `specs/` — Detailed requirements
+
+For complex features, write a spec file. Plain English is fine. Include:
+- What the feature does (from a user's perspective)
+- What success looks like
+- Edge cases or constraints ("don't change the header," "must work on mobile")
+
+### `sprint_plan.md` — You usually don't edit this directly
+
+Ralph generates this during planning and updates it during execution. But you can read it anytime to see progress.
+
+---
+
+## When something goes wrong
+
+**Ralph gets stuck or stops mid-task:**
+Run `claude "/ralph"` again. It picks up where it left off.
+
+**The staging site doesn't look right:**
+Tell Ralph what's wrong — describe what you expected vs. what you see. It can fix visual issues in a follow-up task.
+
+**You want to undo everything Ralph did:**
+Your code is in git, so nothing is permanent. Ask the engineer on your team to help revert if needed, or run `git revert` yourself if you're comfortable with it.
+
+**"`claude` command not found":**
+Claude Code isn't installed. See [What you need](#2-claude-code) above.
+
+**"`/ralph` not found":**
+The Ralph skills aren't installed. Run the setup script again:
 ```bash
-cd ralph-starter-kit/examples/nodejs-typescript
-../../scripts/setup.sh
-claude "/ralph-plan"
-claude "/ralph-continuous"
+~/Documents/ralph-starter-kit/scripts/setup.sh
 ```
 
-**Included examples:**
-- `examples/nodejs-typescript/` - Express + Playwright
-- `examples/python-fastapi/` - FastAPI + pytest
-
-Each has: config, build instructions, specs, code patterns.
+**Need help:**
+Reach out to Zach Partyka (zpartyka@zillow.com). No question is too basic.
 
 ---
 
-## Troubleshooting
+## Tips from 36 sprints
 
-**"Claude CLI not found":**
-- Install: `claude --version` should work
-- Zillow: [ServiceNow](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9)
-
-**"/ralph not found":**
-- Skills not installed. Run setup.sh again or verify `~/.claude/skills/` has ralph directories.
-
-**Tests fail:**
-- Run test command manually
-- Python: activate venv (`source venv/bin/activate`)
-- Node.js: install deps (`npm install`)
-
-**Git push rejected:**
-- Check: `git remote -v` (must be HTTPS, not SSH)
-- Fix: `git remote set-url origin https://gitlab.zgtools.net/your-team/repo.git`
-
-**Windows tabs don't spawn:**
-- See Advanced → Windows Terminal Setup
-
-**More:** See `EXAMPLES.md`
+- **Start small.** Your first sprint should be 3–5 small tasks. Build confidence before going bigger.
+- **Be specific in specs.** "Make the page faster" is hard for Ralph. "Reduce the brief-loading spinner from 5 seconds to under 2 seconds" is actionable.
+- **Always check staging visually.** 36% of UI tasks in early sprints passed tests but had visual issues. A quick look in the browser catches this.
+- **One thing per task.** "Add a button AND change the header AND update the footer" should be three tasks, not one.
+- **Investigation tasks are valuable.** For bugs or performance issues, start with a task that just investigates and reports findings. Then plan fixes based on what Ralph discovers.
 
 ---
 
-## Advanced
+## Going deeper
 
-### Custom Install Path
+Once you're comfortable with the basics:
 
-```bash
-/path/to/ralph-starter-kit/scripts/setup.sh --path ~/custom-location
-```
-
-Default: `~/Documents/ralph/`
-
-### iTerm2 Hotkey (macOS)
-
-Press one key to run sprints.
-
-**Setup:**
-1. iTerm2 → Preferences (Cmd+,) → Keys → Key Bindings → "+"
-2. Shortcut: `Shift+Cmd+R`, Action: "Send Text with vim Special Chars", Text: `claude "/ralph-continuous"\n`
-3. Grant Accessibility permission when prompted
-
-**Other hotkeys:**
-- `Shift+Cmd+P` → `claude "/ralph-plan"\n`
-- `Shift+Cmd+T` → `claude "/ralph"\n`
-
-### Windows Terminal Setup
-
-**If tabs don't spawn:**
-
-1. Windows Terminal → Settings (Ctrl+,) → "+ Add profile" → "New empty profile"
-2. Name: `Git Bash`, Command: `C:\Program Files\Git\bin\bash.exe`, Start dir: `%USERPROFILE%`
-3. Advanced → Close on exit: `Never`
-
-**Custom profile name:**
-```bash
-export RALPH_WT_PROFILE="YourProfileName"
-```
-
-### Project Files
-
-```
-your-project/
-├── ralph.config.sh      # Config: git, staging, tests
-├── RALPH.md             # Build instructions
-├── roadmap.md           # What to build (Now / Next / Later)
-├── sprint_plan.md       # Current sprint tasks
-├── specs/               # Feature specs
-├── stdlib/              # Code patterns
-└── sprints/             # Sprint archives
-    ├── sprint_history.md
-    └── sprint-N-theme/
-        └── sprint_summary.md
-```
-
-**ralph.config.sh:** Git remote, staging URL, test commands, timeouts.
-
-**RALPH.md:** Build instructions. Update when patterns change.
-
-**roadmap.md:** Product roadmap with Now / Next / Later sections. `/ralph-plan` pulls items from the **Now** section to build sprints. `/ralph-archive` flows follow-ups back here after each sprint.
-
-**sprint_plan.md:** Current sprint tasks. Created by `/ralph-plan`, updated by `/ralph` during execution.
-
-**specs/:** Requirements, API contracts, edge cases, success criteria.
-
-**stdlib/:** Code examples, test patterns, conventions.
-
-**sprints/:** Sprint archives. `sprint_history.md` is an index of all completed sprints. Each sprint gets its own folder with a `sprint_summary.md` containing performance metrics, ROI, and learnings. Created automatically by `/ralph-archive`.
-
-### Tips
-
-**Clear specs:**
-- Edge cases and error handling
-- Validation commands
-- Files to modify
-
-**Small tasks:**
-- 15-30 minutes each
-- One feature/fix per task
-- Clear success criteria
-
-**Keep your roadmap current:**
-- Add features to `roadmap.md` in the Now / Next / Later sections
-- `/ralph-plan` reads the Now section to suggest sprint items
-- Move items between sections as priorities change
-
-**Run retrospectives:**
-- `/ralph-archive` archives the sprint, generates a summary with ROI metrics, and updates RALPH.md with learnings
-- Follow-ups flow back to `roadmap.md` automatically
-- Keeps build instructions current
+| Doc | What it covers |
+|-----|---------------|
+| `EXAMPLES.md` | Detailed walkthroughs, workflow patterns, and troubleshooting |
+| `examples/nodejs-typescript/` | Example setup for a Node.js/TypeScript project |
+| `examples/python-fastapi/` | Example setup for a Python/FastAPI project |
 
 ---
 
-## More
-
-- `EXAMPLES.md` - Detailed guides
-- `CHANGELOG.md` - Version history
-- Questions: Zach Partyka (zpartyka@zillow.com)
+Questions? Reach out to Zach Partyka (zpartyka@zillow.com).
 
 Internal Zillow use only.

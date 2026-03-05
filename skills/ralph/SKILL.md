@@ -5,51 +5,53 @@ description: Building mode for Ralph - implements ONE thing from sprint_plan.md 
 
 # Ralph Building Mode
 
-Implement ONE thing from `sprint_plan.md`, then stop.
+**One task per run.** Pick the single next **open** task from `sprint_plan.md` (one unchecked `[ ]` item). Do that task. Then stop. Do not start a second task. Do not re-do or re-describe work that is already completed — that wastes tokens. The next run will get the next open task.
 
-## When to Use
+## When to use this skill
 
-- sprint_plan.md exists (created by `/ralph-plan`)
-- Ready to build next most important thing
-- Want human review after each implementation
-- Prefer tight control over continuous execution
+- There is a `sprint_plan.md` (from `/ralph-plan`).
+- You are doing the **next open task only**, then stopping for human review.
 
-## When Invoked from ralph-continuous
+## When the prompt is only "/ralph" (run from terminal wrapper)
 
-If the user message includes **ONE TASK ONLY** or is from `ralph-continuous.sh`:
-- Implement **exactly one** unchecked task from sprint_plan.md (the first one).
-- Do **not** implement, mark complete, or touch any other task.
-- When done, **touch the claude-done marker** specified in the prompt (e.g., `touch /path/to/.ralph-markers/task-N-claude-done`).
-- If the entire sprint is complete (no unchecked tasks left), also touch the sprint-complete marker.
-- The next tab will handle the next task.
+You were started from a terminal (e.g. iTerm2). The prompt is just `/ralph`. All session data is in a file.
+
+**Step 1 — Read session context.**  
+Open `.ralph-markers/session-context.txt` in the project. The wrapper wrote it before starting you. It has one line per key:
+- `projectDir=` → use this path as the project directory for everything below.
+- `taskNum=` → **run index only** (1st run, 2nd run, …). Used for marker file names. **It is NOT the task ID in sprint_plan.md.** Do not use it to choose which task to do.
+- `doneMarker=` → when the task is done, run `touch` on this path.
+- `sprintCompleteMarker=` → if there are no unchecked tasks left, also run `touch` on this path.
+
+**Which task to do:** Always pick the **single next open task** from sprint_plan.md (first unchecked `[ ]` by priority: Critical Path → High → Medium → Low). That task has a number like **#9** in the plan — that is the sprint task ID. Implement that one. Ignore the `taskNum` value in session-context when selecting the task.
+
+**Step 2 — If the file is missing** (e.g. someone ran /ralph by hand):  
+Ask for the project directory. Do one task from sprint_plan.md, then stop. Do not touch any marker files.
+
+**Step 3 — If the file exists:**  
+- Use `projectDir` as the project directory. Do not ask.
+- Do the **one** next open task from sprint_plan.md (first unchecked `[ ]` by priority). The plan uses IDs like #1, #2, #9 — use the plan, not `taskNum` from the file. Do not start another task. Do not re-do completed tasks.
+- When that task is done: `touch` the path in `doneMarker`.
+- If the sprint has no unchecked tasks left: `touch` the path in `sprintCompleteMarker`.
+- Then stop. The next run will pick the next open task.
 
 ## Workflow
 
 ### 1. Get Project Directory
 
-Check if directory was provided in the prompt first. If the user's message contains "Project directory:" followed by a path, use that path directly.
-
-If no directory provided, use `AskUserQuestion`:
-```
-Which project directory should I work in?
-(Full path to repo with sprint_plan.md, specs/, stdlib/, RALPH.md)
-```
+1. If you read `.ralph-markers/session-context.txt` and it has `projectDir=...`, use that path. Stop here.
+2. Else if the user message contains "Project directory:" and a path, use that path. Stop here.
+3. Else ask: "Which project directory should I work in? (Full path to the repo that has sprint_plan.md and RALPH.md)"
 
 ### 2. Validate Directory
 
-```bash
-ls -la [PROJECT_DIR]
-```
+Run `ls -la` on the project directory.
 
-Required (stop if missing):
-- `sprint_plan.md` — if missing, tell user to run `/ralph-plan`
-- `RALPH.md`
+**Must be there (stop if missing):** `sprint_plan.md`, `RALPH.md`. If sprint_plan.md is missing, tell the user to run `/ralph-plan`.
 
-Warn but continue if missing:
-- `specs/` directory
-- `stdlib/` directory
+**Optional (warn but continue):** `specs/`, `stdlib/`.
 
-Do NOT use glob patterns — they fail when directories exist but patterns don't match.
+Do not use glob patterns in commands; they can fail even when the dirs exist.
 
 ### 3. Study Context
 
@@ -61,16 +63,11 @@ Read these in parallel:
 
 ### 4. Select Task
 
-Pick ONE unchecked item from sprint_plan.md. Skip any task marked BLOCKED.
+Choose the **single next open task** — the first unchecked `[ ]` item in sprint_plan.md. Skip BLOCKED. Ignore all `[x]` items; do not re-do or describe completed work.
 
-Selection order:
-1. First unblocked item in "Critical Path"
-2. Then "High Priority"
-3. Then "Medium Priority"
-4. Then "Low Priority"
-5. If all blocked or complete, stop
+**Order to pick:** Critical Path first, then High, then Medium, then Low. The task has an ID in the plan (e.g. **#9**). That ID is from the plan, not from session-context `taskNum` (which is the run index). If everything is blocked or done, stop and say so. You do only this one task this run.
 
-Announce your choice with the task, its category, and why it matters. Note any skipped blocked tasks.
+Say which task you chose (ID and title from the plan) and which section it was in.
 
 ### 5. Clock In
 
@@ -79,65 +76,49 @@ Mark the task IN PROGRESS in sprint_plan.md:
 ```markdown
 - [ ] **#4** Add globalTeardown to playwright.config.ts - IN PROGRESS
   - Started: 2026-02-10
-  - Model: Sonnet 4.5 (default)
+  - Model: Sonnet 4.6 (default)
 ```
 
 Check the prompt for `"Ralph model: [value]"` — if present, note it.
 
 Shell handles timestamp capture. You just mark the status.
 
-### 6. Detect Investigation Sprints
+### 6. Investigation Tasks
 
-If the sprint theme or first tasks involve performance, bugs, slowness, latency, or debugging — start with investigation, not implementation.
+If the current task is labeled "investigate", "audit", "research", or "diagnose" — do the investigation, then **immediately add follow-up tasks as unchecked `[ ]` items** in `sprint_plan.md` before marking the investigation complete.
 
-**Why:** Sprint 2 proved this. "Investigate chat response slowness" (7 min) identified 3 root causes, informing 9 subsequent tasks with zero blockers.
+**Why this matters:** The shell loop only continues if unchecked `[ ]` tasks exist. If you write findings as prose but don't add task items, Ralph stops and the sprint stalls.
 
-Investigation tasks:
-- Document root causes, don't implement fixes
-- Time-box to 10-15 min
-- Update sprint_plan.md with findings and recommended fix order
+**How to complete an investigation task:**
 
-Skip investigation for new features, clear specs, or continuation of previous sprint work.
+1. Do the investigation (time-box to 10–15 min).
+2. Write a short findings summary as sub-bullets under the task.
+3. Add each recommended follow-up as a new unchecked task in the appropriate priority section:
+
+```markdown
+- [ ] **#N** Fix [specific thing found] (from investigation #M)
+```
+
+4. Move the investigation task to Completed.
+5. The shell loop will pick up the new tasks automatically.
+
+**Skip investigation mode for:** new features with clear specs, continuation of previous sprint work.
 
 ### 7. Search Codebase
 
-**Search before writing any new code.** This is the single biggest source of past failures — building new when existing code should be extended.
+**Always search before writing new code.** Most past failures were from adding new code instead of extending existing code.
 
-Confirm task is marked IN PROGRESS, then search using parallel subagents:
+With the task marked IN PROGRESS, search for: (A) files whose names match the feature, (B) related function names and imports, (C) similar or partial implementations (including Python for API work). For **UI text or labels**, grep all of `client/` (e.g. `components/layout/`, `components/mobile/`, `pages/`) and list every place the text appears; fix all of them or block.
 
-**A. Existing implementations** — files with relevant names
+If you find existing code: **extend** it when it fits; **add new** only when it’s a different area or stack; **block** when it’s unclear or a big design choice.
 
-**B. Related functions** — grep for function names, imports, exports
-
-**C. Similar functionality** — check for partial implementations, utilities, Python files for API tasks
-
-**D. For UI changes — search ALL locations:**
-
-Sprint 3 Learning: Task #13 failed because subtext existed in 3 components but only 1 was fixed.
-
-Before changing any UI text/label/component, grep the entire `client/` directory. Check `components/layout/`, `components/mobile/`, `pages/`. Report all instances found. Do not proceed until all are identified.
-
-**E. If existing code found — decide:**
-
-- **Extend** when same domain, natural fit, same patterns
-- **Build new** when different domain, awkward refactoring, different stack
-- **Block** when genuinely ambiguous or significant architectural decision
-
-**Write a "Search complete" summary.** Use only this summary for all later decisions — do not re-paste raw grep output.
+Write one short "Search complete" summary and use that for decisions. Do not paste long grep output.
 
 ### 8. Block on Ambiguity
 
-Stop and ask before implementing if:
-- Task requirements are vague
-- Need to guess IDs, formats, field names, API parameters
-- Found existing code that might handle this
-- Integration path unclear
-- Specs contradict each other or are incomplete
-- stdlib doesn't cover this pattern
+Do **not** implement if you would have to guess: IDs, formats, field names, API params, or how this fits with existing code. Do **not** implement if specs conflict or stdlib doesn’t cover the pattern. If you’ve added 2–3 separate pieces and they’re not wired together, stop and check sprint_plan.md for an integration task; if none or unclear, block.
 
-**Integration checkpoint:** If you've built 2-3 isolated services without connecting them, stop. Check sprint_plan.md for Integration/Testing tasks. If none exist or the path is unclear, block and ask.
-
-How to block: update sprint_plan.md with BLOCKED status, document the specific questions, and exit.
+**To block:** Put the task in the Blocked section of sprint_plan.md with the exact questions, then exit.
 
 ### 9. Check Test Requirements
 
@@ -250,18 +231,14 @@ Update the plan as you work, not just at the end.
 
 **Discovered new work:** Add to appropriate priority section with `(discovered during #N)`.
 
-**Completing task:** Move to Completed section with this exact format:
+**Completing task:** Move the task to the Completed section. Use this format (keep the line `**Performance:** SHELL_WILL_UPDATE` exactly; the shell fills in duration/cost later):
 
 ```markdown
-## Completed
-
 - [x] **#4** Add globalTeardown to playwright.config.ts
   - Added tests/fixtures/globalTeardown.ts
   - Configured playwright.config.ts
   - **Performance:** SHELL_WILL_UPDATE
 ```
-
-**The literal string `SHELL_WILL_UPDATE` is required.** The shell replaces it with actual duration, model, and cost after you exit. Do not attempt to calculate these yourself.
 
 Update the "Last updated" timestamp.
 
@@ -271,26 +248,18 @@ Only if you learned something new about building/running the project — a non-o
 
 ### 17. Finish
 
-**If sprint is NOT complete:**
-
-Report what you implemented, validation results, sprint progress, and the next task. Then stop.
+**Sprint not complete:** Report in this format, then stop:
 
 ```
 === Task Complete ===
-
-Implemented: [task description]
+Implemented: [one-line task description]
 Validation: TypeScript, GitLab, Staging, Playwright
 Sprint Progress: X/Y tasks
-Next: [next task]
-
+Next: [next task title]
 Run /ralph again to continue.
 ```
 
-**If sprint IS complete:**
-
-Invoke `/ralph-archive` with the project directory.
-
-**Then stop.** Do not continue to the next task. Human reviews first.
+**Sprint complete (no unchecked tasks):** Run `/ralph-archive` with the project directory, then stop. Do not start another task.
 
 ---
 
@@ -312,6 +281,8 @@ Why: LLMs are unreliable at arithmetic. Shell math is deterministic.
 ---
 
 ## Edge Cases
+
+**session-context `taskNum` vs sprint_plan task ID:** `taskNum` in the file is the **run index** (1st, 2nd, 3rd run). It is not the task ID (#1, #2, #9) in sprint_plan.md. After a reopened sprint or multiple runs, `taskNum` might be 2 while the only open task in the plan is #9. Always choose by the plan: first open `[ ]` by priority. Ignore `taskNum` for task selection.
 
 **Multiple items at same priority:** Pick the first one in the list.
 
@@ -343,4 +314,5 @@ Fails when:
 - Staging deploy fails
 - Tests fail after 2 fix attempts
 - Placeholder implementation
-- Multiple items implemented
+- Multiple items implemented in one run (do one open task only)
+- Re-doing or re-describing already completed tasks (wastes tokens)

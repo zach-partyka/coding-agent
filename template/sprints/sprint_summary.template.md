@@ -9,8 +9,8 @@
 - **Total duration:** [X hours Y min]
 - **Total cost:** $[X.XX]
 - **Average per task:** [X.X min] / $[X.XX]
-- **Token usage:** [XXX]K input, [XX]K output
-- **Model:** [model used, e.g. default, opus, sonnet-1m, haiku]
+- **Main model:** [e.g. Opus 4.6]
+- **Sub models:** [e.g. Sonnet 4.6, Haiku 4.5 — or "none" if single-model sprint]
 
 **Task count note:** Count only tracked tasks. Validation (e.g. run full test suite) is acceptance criteria, not a separate task unless it includes investigation/fixes.
 
@@ -39,19 +39,28 @@
 
 [Copy entire "Completed" section from sprint_plan.md with performance data]
 
-Example format:
+Example format (multi-model):
 - [x] Brief → audience logic mapper - 2026-01-27
   - Implemented in server/services/audienceMapper.ts
-  - Pure deterministic parsing, no AI calls
-  - Tested with multiple brief formats
-  - **Performance:** 8 min | 12.5K in, 3.2K out | $0.18
+  - **Performance:** 8 min | $1.91
+    - Main: Opus | $1.81 (34 in / 4322 out / 127242 cache-write / 1818518 cache-read)
+    - Sub: Haiku | $0.10 (47 in / 24 out / 64556 cache-write / 173472 cache-read) — Scout codebase
+    - Duration calc: (end - start) / 60 = X / 60 = Y min
+    - Timestamps: start=EPOCH, end=EPOCH
+
+Example format (single model):
+- [x] Task name - 2026-01-27
+  - **Performance:** 3 min | Opus | $2.77 (30 in / 2813 out / 309833 cache-write / 1520338 cache-read)
+    - Duration calc: (end - start) / 60 = X / 60 = Y min
+    - Timestamps: start=EPOCH, end=EPOCH
 
 **Performance format explanation:**
 - Duration: Wall clock time from task start to completion (includes thinking/planning)
   - For tasks blocked mid-work: sum of all work phases, excludes wait time
   - Format: "15 min (8 min + 7 min after unblock)" for blocked tasks
-- Tokens: Input and output tokens consumed for this task
-- Cost: Calculated from tokens at current model pricing ($3/M input, $15/M output)
+- Tokens: Per-agent breakdown (input / output / cache-write / cache-read)
+- Cost: Per-agent cost calculated from tokens at model-specific pricing
+- Sub agent descriptions: Captured from Agent tool_use calls (e.g. "Scout codebase", "Run npm run check")
 
 **Tracked autonomously via timestamps:**
 - Start: `date +%s` when task marked IN PROGRESS
@@ -62,7 +71,7 @@ Example format:
 
 **Blocked task example:**
 - [x] Task name - 2026-01-27
-  - **Performance:** 15 min (8 min + 7 min after unblock) | 25K in, 6K out | $0.35
+  - **Performance:** 15 min (8 min + 7 min after unblock) | $0.35
   - **Note:** Blocked for missing credentials, resumed after provided
 
 ## Technical Learnings

@@ -145,8 +145,8 @@ Configured in `tsconfig.json` and Vite config.
 - **Hybrid TypeScript/Python**: Express server calls Python scripts for AI operations
   - Python dependencies NOT managed by npm - requires separate `pip install`
   - Python scripts in `server/` directory
-- **Database**: Uses Drizzle ORM with PostgreSQL (Neon) + Databricks SQL
-- **Authentication**: Passport.js with Google OAuth and local auth
+- **Database**: Databricks SQL (custom query layer, Zod schemas — no ORM)
+- **Authentication**: Email/password (bcrypt) with express-session (sessions in Databricks)
 - **CORS**: Configured for `*.zgtools.net` domains only
 - **Health Check**: Returns `{"status":"healthy","timestamp":"2026-01-15T10:30:00Z"}`
 

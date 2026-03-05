@@ -42,7 +42,7 @@ Confirm sprint number, theme, archive directory, task count, duration, and cost 
 
 From `sprint_plan.md`, extract:
 
-**Sprint Performance Summary section:** sprint name, start date, status, total tasks, total duration, total cost, average per task, model (if present).
+**Sprint Performance Summary section:** sprint name, start date, status, total tasks, total duration, total cost, average per task, main model, sub models (if present).
 
 **Completed section:** all completed tasks with per-task performance data.
 
@@ -54,7 +54,7 @@ From `sprint_plan.md`, extract:
 
 Use template from `sprints/sprint_summary.template.md`.
 
-Include model in Performance Metrics if it was recorded in sprint_plan.md.
+Include main model and sub models in Performance Metrics if recorded in sprint_plan.md.
 
 **Business case formulas (engineer baseline: 7 hours / $350):**
 
@@ -93,6 +93,8 @@ Exit code 0: continue. Exit code 1: surface discrepancies as a warning but do no
 
 ### 7. Update sprint_history.md
 
+Path: **sprints/sprint_history.md** (same project directory as sprint_plan.md). Do not write to project root or to Ralph/template.
+
 Add a new entry above the previous sprint (reverse chronological order):
 
 ```markdown
@@ -101,9 +103,12 @@ Add a new entry above the previous sprint (reverse chronological order):
 **Status:** Complete
 **Duration:** [start] - [end]
 **Performance:** [X] tasks, [Y] min, $[Z], [ROI]x faster, [cost reduction]%
-**Model:** [if present]
+**Main model:** [if present]
+**Sub models:** [if present, e.g. "Sonnet 4.6, Haiku 4.5" — omit line if single-model sprint]
 
 [View details](./sprint-[N]-[theme]/)
+
+(Link is relative to sprints/; same folder as sprint_history.md.)
 
 ---
 ```
@@ -190,4 +195,4 @@ Complete when:
 Fails when:
 - Sprint not complete (tasks still pending)
 - Directory creation fails
-- Required files missing (sprint_plan.md, sprint_history.md)
+- Required files missing (sprint_plan.md, sprints/sprint_history.md)

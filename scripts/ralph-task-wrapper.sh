@@ -65,30 +65,30 @@ cd "$PROJECT_DIR" || {
 case "${RALPH_MODEL:-default}" in
   opus)
     RALPH_MODEL_LABEL="Opus 4.6"
-    RALPH_INPUT_RATE="15"; RALPH_OUTPUT_RATE="75"
-    RALPH_CACHE_WRITE_RATE="18.75"; RALPH_CACHE_READ_RATE="1.50"
+    RALPH_INPUT_RATE="5"; RALPH_OUTPUT_RATE="25"
+    RALPH_CACHE_WRITE_RATE="6.25"; RALPH_CACHE_READ_RATE="0.50"
     RALPH_COST_PER_MIN="0.05"
     ;;
   opus-1m)
     RALPH_MODEL_LABEL="Opus 4.6 (1M)"
-    RALPH_INPUT_RATE="15"; RALPH_OUTPUT_RATE="75"
-    RALPH_CACHE_WRITE_RATE="18.75"; RALPH_CACHE_READ_RATE="1.50"
+    RALPH_INPUT_RATE="5"; RALPH_OUTPUT_RATE="25"
+    RALPH_CACHE_WRITE_RATE="6.25"; RALPH_CACHE_READ_RATE="0.50"
     RALPH_COST_PER_MIN="0.08"
     ;;
   sonnet-1m)
-    RALPH_MODEL_LABEL="Sonnet 4.5 (1M)"
+    RALPH_MODEL_LABEL="Sonnet 4.6 (1M)"
     RALPH_INPUT_RATE="3"; RALPH_OUTPUT_RATE="15"
     RALPH_CACHE_WRITE_RATE="3.75"; RALPH_CACHE_READ_RATE="0.30"
     RALPH_COST_PER_MIN="0.05"
     ;;
   haiku)
     RALPH_MODEL_LABEL="Haiku 4.5"
-    RALPH_INPUT_RATE="0.80"; RALPH_OUTPUT_RATE="4.00"
-    RALPH_CACHE_WRITE_RATE="1.00"; RALPH_CACHE_READ_RATE="0.08"
+    RALPH_INPUT_RATE="1"; RALPH_OUTPUT_RATE="5"
+    RALPH_CACHE_WRITE_RATE="1.25"; RALPH_CACHE_READ_RATE="0.10"
     RALPH_COST_PER_MIN="0.01"
     ;;
   *)
-    RALPH_MODEL_LABEL="Sonnet 4.5 (default)"
+    RALPH_MODEL_LABEL="Sonnet 4.6 (default)"
     RALPH_INPUT_RATE="3"; RALPH_OUTPUT_RATE="15"
     RALPH_CACHE_WRITE_RATE="3.75"; RALPH_CACHE_READ_RATE="0.30"
     RALPH_COST_PER_MIN="0.03"
@@ -103,11 +103,10 @@ readonly SESSION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 readonly ENCODED_PROJECT="${PROJECT_DIR//\//-}"
 readonly SESSION_FILE="$HOME/.claude/projects/${ENCODED_PROJECT}/${SESSION_ID}.jsonl"
 
-# Build Claude command with optional model selection
-CLAUDE_ARGS=("claude" "--dangerously-skip-permissions" "--max-turns" "50" "--session-id" "$SESSION_ID")
-if [ -n "$RALPH_MODEL" ]; then
-  CLAUDE_ARGS+=("--model" "$RALPH_MODEL")
-fi
+# Build Claude command - always pass explicit model so CLI doesn't use its own default (e.g. Opus)
+# When RALPH_MODEL is empty we want Sonnet 4.6, so pass "sonnet" explicitly
+CLAUDE_MODEL_FOR_CLI="${RALPH_MODEL:-sonnet}"
+CLAUDE_ARGS=("claude" "--dangerously-skip-permissions" "--max-turns" "50" "--session-id" "$SESSION_ID" "--model" "$CLAUDE_MODEL_FOR_CLI")
 echo -e "Model: ${GREEN}${RALPH_MODEL_LABEL}${NC}"
 echo -e "Session: ${SESSION_ID}"
 echo ""
@@ -151,59 +150,200 @@ run_post_processing() {
   fi
   
   # Parse exact token usage from Claude session JSONL file (SESSION_FILE defined at top level)
+  # Tracks main agent (parent turns) and subagents separately with per-model pricing.
+  # Captures subagent descriptions from Agent tool_use calls for readable output.
   local input_tokens=0
   local output_tokens=0
   local cache_creation_tokens=0
   local cache_read_tokens=0
   local cost_est="0.00"
   local cost_source="est"
+  local main_agent_line=""
+  local sub_agent_lines=""
 
   echo "Looking for session file: $SESSION_FILE" >> "$debug_log"
 
   if [ -f "$SESSION_FILE" ]; then
-    # Parse exact token counts from session JSONL using Python
     local token_data
     token_data=$(python3 -c "
 import json, sys
-input_tok = output_tok = cache_create = cache_read = 0
-turns = 0
+
+RATES = {
+    'opus':   {'input': 5,  'output': 25, 'cache_write': 6.25, 'cache_read': 0.50},
+    'sonnet': {'input': 3,  'output': 15, 'cache_write': 3.75, 'cache_read': 0.30},
+    'haiku':  {'input': 1,  'output': 5,  'cache_write': 1.25, 'cache_read': 0.10},
+}
+LABELS = {'opus': 'Opus', 'sonnet': 'Sonnet', 'haiku': 'Haiku'}
+
+def model_family(model_str):
+    if not model_str:
+        return None
+    m = model_str.lower()
+    for fam in ('opus', 'sonnet', 'haiku'):
+        if fam in m:
+            return fam
+    return None
+
+def cost_for_turn(i, o, cw, cr, fam, default_fam):
+    r = RATES.get(fam or default_fam, RATES.get(default_fam, RATES['sonnet']))
+    return (i/1e6)*r['input'] + (o/1e6)*r['output'] + (cw/1e6)*r['cache_write'] + (cr/1e6)*r['cache_read']
+
+def bucket_init():
+    return {'in':0,'out':0,'cw':0,'cr':0,'cost':0.0,'turns':0}
+
+default_fam = model_family('$RALPH_MODEL') or 'sonnet'
+
+# Separate tracking: main agent vs subagents
+main = {}   # keyed by model family
+subs = {}   # keyed by model family
+sub_descriptions = {}  # model family -> set of description strings
+
+# First pass: collect subagent descriptions from Agent tool_use calls.
+# Correlate each Agent call to its subagent turns by tracking the agentId
+# that appears in subsequent data.message entries.
+agent_descs_ordered = []  # list of (description, subagent_type) in call order
 with open('$SESSION_FILE') as f:
     for line in f:
-        obj = json.loads(line)
+        try:
+            obj = json.loads(line)
+        except:
+            continue
+        msg = obj.get('message', {})
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get('content', [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get('type') == 'tool_use' and block.get('name') == 'Agent':
+                inp = block.get('input', {})
+                desc = inp.get('description', '')
+                stype = inp.get('subagent_type', '')
+                if desc:
+                    agent_descs_ordered.append(desc)
+
+# Second pass: tally tokens
+total_cost = 0.0
+with open('$SESSION_FILE') as f:
+    for line in f:
+        try:
+            obj = json.loads(line)
+        except:
+            continue
+        # Path 1: parent/main agent turns
         msg = obj.get('message', {})
         if isinstance(msg, dict) and 'usage' in msg:
             u = msg['usage']
-            turns += 1
-            input_tok += u.get('input_tokens', 0)
-            output_tok += u.get('output_tokens', 0)
-            cache_create += u.get('cache_creation_input_tokens', 0)
-            cache_read += u.get('cache_read_input_tokens', 0)
-print(f'{input_tok} {output_tok} {cache_create} {cache_read} {turns}')
+            fam = model_family(msg.get('model', '')) or default_fam
+            i = u.get('input_tokens', 0)
+            o = u.get('output_tokens', 0)
+            cw = u.get('cache_creation_input_tokens', 0)
+            cr = u.get('cache_read_input_tokens', 0)
+            tc = cost_for_turn(i, o, cw, cr, fam, default_fam)
+            total_cost += tc
+            main.setdefault(fam, bucket_init())
+            d = main[fam]; d['in']+=i; d['out']+=o; d['cw']+=cw; d['cr']+=cr; d['cost']+=tc; d['turns']+=1
+        # Path 2: subagent turns
+        data = obj.get('data', {})
+        if isinstance(data, dict):
+            dmm = data.get('message', {})
+            if isinstance(dmm, dict):
+                inner = dmm.get('message', {})
+                if isinstance(inner, dict) and 'usage' in inner:
+                    u = inner['usage']
+                    fam = model_family(inner.get('model', '')) or default_fam
+                    if fam == '<synthetic>' or not fam:
+                        continue
+                    i = u.get('input_tokens', 0)
+                    o = u.get('output_tokens', 0)
+                    cw = u.get('cache_creation_input_tokens', 0)
+                    cr = u.get('cache_read_input_tokens', 0)
+                    if i == 0 and o == 0:
+                        continue
+                    tc = cost_for_turn(i, o, cw, cr, fam, default_fam)
+                    total_cost += tc
+                    subs.setdefault(fam, bucket_init())
+                    d = subs[fam]; d['in']+=i; d['out']+=o; d['cw']+=cw; d['cr']+=cr; d['cost']+=tc; d['turns']+=1
+
+# Compute aggregate totals
+all_buckets = list(main.values()) + list(subs.values())
+input_tok = sum(d['in'] for d in all_buckets)
+output_tok = sum(d['out'] for d in all_buckets)
+cache_create = sum(d['cw'] for d in all_buckets)
+cache_read = sum(d['cr'] for d in all_buckets)
+turns = sum(d['turns'] for d in all_buckets)
+
+# Line 1: totals (backward-compatible)
+print('%d %d %d %d %d %.4f' % (input_tok, output_tok, cache_create, cache_read, turns, total_cost))
+
+# Line 2+: MAIN:<model> lines (usually just one)
+for fam in sorted(main, key=lambda f: main[f]['cost'], reverse=True):
+    d = main[fam]
+    label = LABELS.get(fam, fam.title())
+    print('MAIN:%s|%.2f|%d|%d|%d|%d|%d' % (label, d['cost'], d['turns'], d['in'], d['out'], d['cw'], d['cr']))
+
+# SUB:<model> lines with descriptions.
+# Descriptions are collected from all Agent tool_use calls (not model-specific).
+# Attach all descriptions to the first/primary sub line for readability.
+desc_str = ', '.join(agent_descs_ordered) if agent_descs_ordered else ''
+first_sub = True
+for fam in sorted(subs, key=lambda f: subs[f]['cost'], reverse=True):
+    d = subs[fam]
+    label = LABELS.get(fam, fam.title())
+    ds = desc_str if first_sub else ''
+    first_sub = False
+    print('SUB:%s|%.2f|%d|%d|%d|%d|%d|%s' % (label, d['cost'], d['turns'], d['in'], d['out'], d['cw'], d['cr'], ds))
+
+# MODEL: lines for debug log (unchanged)
+by_model = {}
+for fam, d in list(main.items()) + list(subs.items()):
+    by_model.setdefault(fam, bucket_init())
+    b = by_model[fam]
+    for k in ('in','out','cw','cr','cost','turns'):
+        b[k] += d[k]
+for fam in sorted(by_model):
+    d = by_model[fam]
+    print('MODEL:%s turns=%d in=%d out=%d cw=%d cr=%d cost=%.4f' % (fam, d['turns'], d['in'], d['out'], d['cw'], d['cr'], d['cost']))
 " 2>/dev/null)
 
     if [ -n "$token_data" ]; then
-      input_tokens=$(echo "$token_data" | awk '{print $1}')
-      output_tokens=$(echo "$token_data" | awk '{print $2}')
-      cache_creation_tokens=$(echo "$token_data" | awk '{print $3}')
-      cache_read_tokens=$(echo "$token_data" | awk '{print $4}')
+      # Line 1: totals
+      local totals_line
+      totals_line=$(echo "$token_data" | head -1)
+      input_tokens=$(echo "$totals_line" | awk '{print $1}')
+      output_tokens=$(echo "$totals_line" | awk '{print $2}')
+      cache_creation_tokens=$(echo "$totals_line" | awk '{print $3}')
+      cache_read_tokens=$(echo "$totals_line" | awk '{print $4}')
       local api_turns
-      api_turns=$(echo "$token_data" | awk '{print $5}')
+      api_turns=$(echo "$totals_line" | awk '{print $5}')
+      local python_cost
+      python_cost=$(echo "$totals_line" | awk '{print $6}')
+
+      # Parse MAIN: and SUB: lines for structured output
+      main_agent_line=$(echo "$token_data" | grep '^MAIN:' | head -1)
+      sub_agent_lines=$(echo "$token_data" | grep '^SUB:')
 
       if [ "$output_tokens" -gt 0 ] 2>/dev/null; then
-        # Calculate exact cost using centralized Anthropic pricing (RALPH_*_RATE)
-        cost_est=$(awk "BEGIN {printf \"%.2f\", \
-          ($input_tokens / 1000000) * $RALPH_INPUT_RATE + \
-          ($output_tokens / 1000000) * $RALPH_OUTPUT_RATE + \
-          ($cache_creation_tokens / 1000000) * $RALPH_CACHE_WRITE_RATE + \
-          ($cache_read_tokens / 1000000) * $RALPH_CACHE_READ_RATE}")
+        cost_est=$(printf "%.2f" "$python_cost")
         cost_est=$(ensure_leading_zero "$cost_est")
         cost_source="actual"
-        echo "Session token usage (${api_turns} API turns):" >> "$debug_log"
+        echo "Session token usage (${api_turns} API turns, model-aware pricing):" >> "$debug_log"
         echo "  Input:          ${input_tokens}" >> "$debug_log"
         echo "  Output:         ${output_tokens}" >> "$debug_log"
         echo "  Cache creation: ${cache_creation_tokens}" >> "$debug_log"
         echo "  Cache read:     ${cache_read_tokens}" >> "$debug_log"
         echo "  Cost:           \$${cost_est}" >> "$debug_log"
+        if [ -n "$main_agent_line" ]; then
+          echo "  Main agent:     ${main_agent_line}" >> "$debug_log"
+        fi
+        if [ -n "$sub_agent_lines" ]; then
+          echo "$sub_agent_lines" | while read -r sl; do
+            echo "  Sub agent:      ${sl}" >> "$debug_log"
+          done
+        fi
+        echo "$token_data" | grep '^MODEL:' | while read -r model_line; do
+          echo "  ${model_line}" >> "$debug_log"
+        done
       fi
     else
       echo "Python token parsing failed" >> "$debug_log"
@@ -232,37 +372,160 @@ print(f'{input_tok} {output_tok} {cache_create} {cache_read} {turns}')
   # ── 1. Add cost data to Completed section Performance lines ──
   # Performance data lives in the Completed section only (no duplication in Tasks).
   # Shell is source of truth for cost/tokens. Handles two cases:
-  #   a) Claude wrote SHELL_WILL_UPDATE → replace with full performance line
+  #   a) Claude wrote SHELL_WILL_UPDATE → replace with full performance block
   #   b) Claude wrote partial data like "5 min | Opus 4.6" (no $) → append cost
   # Both cases only target lines AFTER "## Completed" heading.
+  #
+  # Output format (multi-model):
+  #   - **Performance:** 3 min | $1.87
+  #     - Main: Opus | $1.77 (33 in / 4192 out / 127069 cache-write / 1746938 cache-read)
+  #     - Sub: Haiku | $0.10 (47 in / 24 out / 64556 cache-write / 173472 cache-read) — codebase-scout, validation-runner
+  # Output format (single model):
+  #   - **Performance:** 3 min | Opus | $2.77 (30 in / 2813 out / 309833 cache-write / 1520338 cache-read)
   if [ -f "$sprint_plan" ]; then
-    local cost_str
-    if [ "$cost_source" = "actual" ]; then
-      cost_str="\$${cost_est} (${input_tokens} in / ${output_tokens} out / ${cache_creation_tokens} cache-write / ${cache_read_tokens} cache-read)"
+    local has_subs=false
+    [ -n "$sub_agent_lines" ] && has_subs=true
+
+    # Build the replacement block as a temp file (handles multi-line cleanly)
+    local perf_block_file
+    perf_block_file=$(mktemp)
+
+    if [ "$cost_source" = "actual" ] && [ "$has_subs" = true ]; then
+      # Multi-model: summary line + per-agent sub-bullets
+      echo "  - **Performance:** ${task_duration} min | \$${cost_est}" >> "$perf_block_file"
+
+      # Main agent line(s) — format: MAIN:Label|cost|turns|in|out|cw|cr
+      echo "$main_agent_line" | while IFS='|' read -r _prefix cost turns inp outp cw cr; do
+        local model="${_prefix#MAIN:}"
+        cost=$(ensure_leading_zero "$cost")
+        echo "    - Main: ${model} | \$${cost} (${inp} in / ${outp} out / ${cw} cache-write / ${cr} cache-read)" >> "$perf_block_file"
+      done
+
+      # Sub agent line(s) — format: SUB:Label|cost|turns|in|out|cw|cr|descs
+      echo "$sub_agent_lines" | while IFS='|' read -r _prefix cost turns inp outp cw cr descs; do
+        local model="${_prefix#SUB:}"
+        cost=$(ensure_leading_zero "$cost")
+        local desc_suffix=""
+        if [ -n "$descs" ]; then
+          desc_suffix=" — ${descs}"
+        fi
+        echo "    - Sub: ${model} | \$${cost} (${inp} in / ${outp} out / ${cw} cache-write / ${cr} cache-read)${desc_suffix}" >> "$perf_block_file"
+      done
+
+      echo "    - Duration calc: (${task_end_ts} - ${TASK_START_TS}) / 60 = ${duration_diff} / 60 = ${duration_decimal} min" >> "$perf_block_file"
+      echo "    - Timestamps: start=${TASK_START_TS}, end=${task_end_ts}" >> "$perf_block_file"
+    elif [ "$cost_source" = "actual" ]; then
+      # Single model: one-line format
+      local main_model="${RALPH_MODEL_LABEL}"
+      if [ -n "$main_agent_line" ]; then
+        main_model=$(echo "$main_agent_line" | cut -d'|' -f1)
+        main_model="${main_model#MAIN:}"
+      fi
+      echo "  - **Performance:** ${task_duration} min | ${main_model} | \$${cost_est} (${input_tokens} in / ${output_tokens} out / ${cache_creation_tokens} cache-write / ${cache_read_tokens} cache-read)" >> "$perf_block_file"
+      echo "    - Duration calc: (${task_end_ts} - ${TASK_START_TS}) / 60 = ${duration_diff} / 60 = ${duration_decimal} min" >> "$perf_block_file"
+      echo "    - Timestamps: start=${TASK_START_TS}, end=${task_end_ts}" >> "$perf_block_file"
     else
-      cost_str="~\$${cost_est} est"
+      # Estimated cost fallback
+      echo "  - **Performance:** ${task_duration} min | ${RALPH_MODEL_LABEL} | ~\$${cost_est} est" >> "$perf_block_file"
+      echo "    - Duration calc: (${task_end_ts} - ${TASK_START_TS}) / 60 = ${duration_diff} / 60 = ${duration_decimal} min" >> "$perf_block_file"
+      echo "    - Timestamps: start=${TASK_START_TS}, end=${task_end_ts}" >> "$perf_block_file"
     fi
 
-    local full_perf="**Performance:** ${task_duration} min | ${RALPH_MODEL_LABEL} | ${cost_str}"
-    local calc_line="    - Duration calc: (${task_end_ts} - ${TASK_START_TS}) \/ 60 = ${duration_diff} \/ 60 = ${duration_decimal} min"
-    local ts_line="    - Timestamps: start=${TASK_START_TS}, end=${task_end_ts}"
+    # Read the perf block the shell built
+    local perf_block
+    perf_block=$(cat "$perf_block_file")
+    rm -f "$perf_block_file"
 
-    # Single pass: replace SHELL_WILL_UPDATE or append cost to partial Performance lines in Completed section
-    awk -v perf="$full_perf" -v calc="$calc_line" -v ts="$ts_line" -v cost_append=" | ${cost_str}" '
-      /^## Completed/ { in_completed = 1 }
-      in_completed && /\*\*Performance:\*\* SHELL_WILL_UPDATE/ {
-        print "  - " perf
-        print calc
-        print ts
-        next
-      }
-      in_completed && /\*\*Performance:\*\*/ && (index($0, "$") == 0) {
-        sub(/[ \t]*$/, "")
-        print $0 cost_append
-        next
-      }
-      { print }
-    ' "$sprint_plan" > "${sprint_plan}.tmp" && mv "${sprint_plan}.tmp" "$sprint_plan"
+    # Write Python script to temp file (avoids quoting/interpolation issues)
+    local py_script
+    py_script=$(mktemp)
+    cat > "$py_script" << 'PYEOF'
+import re, os
+
+perf_block = os.environ['RALPH_PERF_BLOCK']
+sprint_plan = os.environ['RALPH_SPRINT_PLAN']
+
+in_completed = False
+lines = open(sprint_plan).readlines()
+out = []
+i = 0
+
+while i < len(lines):
+    line = lines[i]
+
+    if re.match(r'^##\s+Completed', line):
+        in_completed = True
+        out.append(line)
+        i += 1
+        continue
+
+    if in_completed and re.match(r'^##\s+', line) and 'Completed' not in line:
+        in_completed = False
+        out.append(line)
+        i += 1
+        continue
+
+    if not in_completed:
+        out.append(line)
+        i += 1
+        continue
+
+    # In Completed section — check for task headers: - [x] ...
+    if re.match(r'\s*-\s*\[x\]', line):
+        task_header = line
+        sub_bullets = []
+        j = i + 1
+        while j < len(lines):
+            sub = lines[j]
+            if re.match(r'\s{2,}', sub) and not re.match(r'\s*-\s*\[', sub) and not re.match(r'^##', sub):
+                sub_bullets.append(sub)
+                j += 1
+            else:
+                break
+
+        has_timestamps = any('Timestamps:' in s for s in sub_bullets)
+
+        if has_timestamps:
+            # Already processed by shell in a previous run — leave alone
+            out.append(task_header)
+            out.extend(sub_bullets)
+            i = j
+            continue
+
+        # Not yet processed — strip any agent-written Performance/SHELL_WILL_UPDATE
+        # lines (and their deeper-indented children), then append shell perf block
+        clean_subs = []
+        k = 0
+        while k < len(sub_bullets):
+            s = sub_bullets[k]
+            if '**Performance:**' in s or 'SHELL_WILL_UPDATE' in s:
+                perf_indent = len(s) - len(s.lstrip())
+                k += 1
+                while k < len(sub_bullets):
+                    next_indent = len(sub_bullets[k]) - len(sub_bullets[k].lstrip())
+                    if next_indent > perf_indent:
+                        k += 1
+                    else:
+                        break
+            else:
+                clean_subs.append(s)
+                k += 1
+
+        out.append(task_header)
+        out.extend(clean_subs)
+        out.append(perf_block.rstrip() + '\n')
+        i = j
+        continue
+
+    out.append(line)
+    i += 1
+
+with open(sprint_plan, 'w') as f:
+    f.writelines(out)
+PYEOF
+
+    RALPH_PERF_BLOCK="$perf_block" RALPH_SPRINT_PLAN="$sprint_plan" python3 "$py_script" 2>/dev/null
+    rm -f "$py_script"
     echo "✓ Performance lines updated in Completed section" >> "$debug_log"
   fi
   
@@ -285,11 +548,13 @@ print(f'{input_tok} {output_tok} {cache_create} {cache_read} {turns}')
       | grep -oE "[0-9]+" | awk '{sum+=$1} END {print sum+0}'; } || true)
     total_duration="${total_duration:-0}"
     
-    # Sum costs (match token-based, duration est, and legacy formats)
-    # Patterns: "$2.45 (123 in", "~$0.25 est", "$.25 est"
+    # Sum costs from **Performance:** lines only (not Main/Sub sub-bullets).
+    # Extract the first dollar amount from each Performance line (always the total).
+    # Handles: "3 min | $3.00", "3 min | Opus | $2.77 (...)", "3 min | Opus | ~$0.25 est"
     local total_cost
-    total_cost=$({ grep -oE "~?\\\$[0-9]*\.[0-9]+ (est|\([0-9]+ in)" "$sprint_plan" 2>/dev/null \
-      | grep -oE "[0-9]*\.[0-9]+" | awk '{sum+=$1} END {printf "%.2f", sum+0}'; } || true)
+    total_cost=$({ grep '\*\*Performance:\*\*' "$sprint_plan" 2>/dev/null \
+      | sed -n 's/.*\$\([0-9]*\.[0-9]*\).*/\1/p' \
+      | awk '{sum+=$1} END {printf "%.2f", sum+0}'; } || true)
     total_cost="${total_cost:-0.00}"
     
     # Averages
@@ -311,16 +576,91 @@ print(f'{input_tok} {output_tok} {cache_create} {cache_read} {turns}')
       total_tasks=$(grep -cE "\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo "?")
     fi
     
+    # Collect unique sub-model families from this sprint's Performance blocks
+    local sub_models_str=""
+    if grep -q '^\s*- Sub:' "$sprint_plan" 2>/dev/null; then
+      sub_models_str=$(grep -oE '^\s*- Sub: [A-Za-z]+' "$sprint_plan" 2>/dev/null \
+        | sed 's/.*Sub: //' | sort -u | paste -sd ', ' -)
+    fi
+
+    # Collect main model from Performance blocks (first match)
+    local main_model_str=""
+    main_model_str=$(grep -oE '^\s*- Main: [A-Za-z]+' "$sprint_plan" 2>/dev/null \
+      | head -1 | sed 's/.*Main: //' || true)
+    # Fall back to single-model Performance lines: "3 min | Opus | $2.77"
+    if [ -z "$main_model_str" ]; then
+      main_model_str=$(grep '\*\*Performance:\*\*' "$sprint_plan" 2>/dev/null \
+        | grep -oE '\| [A-Z][a-z]+ \|' | head -1 | tr -d '| ' || true)
+    fi
+
     # Update summary section in a single pass (only if we have completed tasks)
+    # Matches both "- **Field:**" (bullet) and "**Field:**" (no bullet) formats
     if [ "$completed_count" -gt 0 ]; then
       awk -v completed="$completed_count" -v total_tasks="$total_tasks" \
           -v total_duration="$total_duration" -v total_cost="$total_cost" \
-          -v avg_duration="$avg_duration" -v avg_cost="$avg_cost" '
-        /^\*\*Completed:\*\* / { $0 = "**Completed:** " completed "/" total_tasks " tasks"; print; next }
-        /^\*\*Completed so far:\*\* / { $0 = "**Completed so far:** " completed "/" total_tasks " tasks"; print; next }
-        /^\*\*Total duration:\*\* / { $0 = "**Total duration:** " total_duration " min"; print; next }
-        /^\*\*Total cost:\*\* / { $0 = "**Total cost:** $" total_cost; print; next }
-        /^\*\*Avg per task:\*\* / { $0 = "**Avg per task:** " avg_duration " min / $" avg_cost; print; next }
+          -v avg_duration="$avg_duration" -v avg_cost="$avg_cost" \
+          -v main_model="$main_model_str" -v sub_models="$sub_models_str" '
+        /\*\*Completed tasks:\*\*/ || /\*\*Completed:\*\*/ || /\*\*Completed so far:\*\*/ {
+          match($0, /^[-* ]*/)
+          prefix = substr($0, RSTART, RLENGTH)
+          $0 = prefix "**Completed tasks:** " completed "/" total_tasks
+          print; next
+        }
+        /\*\*Status:\*\*/ {
+          if (completed + 0 >= total_tasks + 0 && total_tasks != "?") {
+            match($0, /^[-* ]*/)
+            prefix = substr($0, RSTART, RLENGTH)
+            $0 = prefix "**Status:** Complete"
+          }
+          print; next
+        }
+        /\*\*Total duration:\*\*/ {
+          match($0, /^[-* ]*/)
+          prefix = substr($0, RSTART, RLENGTH)
+          $0 = prefix "**Total duration:** " total_duration " min"
+          print; next
+        }
+        /\*\*Total cost:\*\*/ {
+          match($0, /^[-* ]*/)
+          prefix = substr($0, RSTART, RLENGTH)
+          $0 = prefix "**Total cost:** $" total_cost
+          print; next
+        }
+        /\*\*Avg per task:\*\*/ {
+          match($0, /^[-* ]*/)
+          prefix = substr($0, RSTART, RLENGTH)
+          $0 = prefix "**Avg per task:** " avg_duration " min / $" avg_cost
+          print; next
+        }
+        /\*\*Main model:\*\*/ {
+          if (main_model != "") {
+            match($0, /^[-* ]*/)
+            prefix = substr($0, RSTART, RLENGTH)
+            $0 = prefix "**Main model:** " main_model
+          }
+          print; next
+        }
+        /\*\*Sub models:\*\*/ {
+          if (sub_models != "") {
+            match($0, /^[-* ]*/)
+            prefix = substr($0, RSTART, RLENGTH)
+            $0 = prefix "**Sub models:** " sub_models
+          }
+          print; next
+        }
+        /\*\*Model:\*\*/ {
+          if (main_model != "") {
+            match($0, /^[-* ]*/)
+            prefix = substr($0, RSTART, RLENGTH)
+            $0 = prefix "**Main model:** " main_model
+            print
+            if (sub_models != "") {
+              print prefix "**Sub models:** " sub_models
+            }
+            next
+          }
+          print; next
+        }
         { print }
       ' "$sprint_plan" > "${sprint_plan}.tmp" && mv "${sprint_plan}.tmp" "$sprint_plan"
       echo "✓ Sprint totals: ${completed_count}/${total_tasks}, ${total_duration} min, \$${total_cost}" >> "$debug_log"
@@ -336,6 +676,8 @@ print(f'{input_tok} {output_tok} {cache_create} {cache_read} {turns}')
     echo "OUTPUT_TOKENS=$output_tokens"
     echo "CACHE_CREATION_TOKENS=$cache_creation_tokens"
     echo "CACHE_READ_TOKENS=$cache_read_tokens"
+    echo "MAIN_AGENT_LINE=$main_agent_line"
+    echo "SUB_AGENT_LINES=$sub_agent_lines"
   } > "$SUMMARY_FILE" 2>/dev/null || true
 
   echo "Post-processing complete at $(date '+%Y-%m-%d %H:%M:%S')" >> "$debug_log"
@@ -381,19 +723,28 @@ BG_WATCHER_PID=$!
 echo "Background watcher started (PID: $BG_WATCHER_PID)" >&3
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# LAUNCH CLAUDE (interactive mode - user can redirect/interrupt)
+# Session context: wrapper writes dynamic values to a file; agent reads it.
+# Prompt is only "/ralph" so the skill is the single source of instructions.
+# Note: TASK_NUM is the run index (1st, 2nd, 3rd run), not the sprint_plan task ID (#1, #2, #9).
+# The agent picks the next open task from sprint_plan.md; taskNum is only for marker paths.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SESSION_CONTEXT_FILE="$MARKER_DIR/session-context.txt"
+cat <<SESSION_EOF >"$SESSION_CONTEXT_FILE"
+projectDir=$PROJECT_DIR
+taskNum=$TASK_NUM
+doneMarker=$CLAUDE_DONE_MARKER
+sprintCompleteMarker=$MARKER_DIR/sprint-complete
+SESSION_EOF
+echo "Session context written to $SESSION_CONTEXT_FILE" >&3
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LAUNCH CLAUDE (interactive; user can redirect or interrupt)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CLAUDE_EXIT=0
 CLAUDE_LOG="$MARKER_DIR/task-${TASK_NUM}-claude-output.log"
-PROMPT=$(cat <<EOF
-/ralph
-
-Implement task #${TASK_NUM} from sprint_plan.md. When that task is done, touch $CLAUDE_DONE_MARKER and stop. Do not start or continue to any other task in this session.
-
-If the entire sprint is complete (no unchecked tasks left): touch $MARKER_DIR/sprint-complete && touch $CLAUDE_DONE_MARKER
-EOF
-)
+readonly PROMPT="/ralph"
 
 # Capture stderr to log file while still displaying it live (maintains full visibility)
 "${CLAUDE_ARGS[@]}" "$PROMPT" 2> >(tee "$CLAUDE_LOG" >&2) || CLAUDE_EXIT=$?
@@ -455,6 +806,21 @@ echo -e "  Model:    ${RALPH_MODEL_LABEL}"
 if [ "$DISPLAY_TOKENS" = "exact" ]; then
   echo -e "  Cost:     \$${DISPLAY_COST} (exact)"
   echo -e "  Tokens:   ${FMT_INPUT} in / ${FMT_OUTPUT} out / ${FMT_CACHE_W} cache-write / ${FMT_CACHE_R} cache-read"
+  if [ -n "${MAIN_AGENT_LINE:-}" ]; then
+    local ma_model ma_cost
+    ma_model=$(echo "$MAIN_AGENT_LINE" | cut -d'|' -f1)
+    ma_model="${ma_model#MAIN:}"
+    ma_cost=$(echo "$MAIN_AGENT_LINE" | cut -d'|' -f2)
+    echo -e "  Main:     ${ma_model} | \$${ma_cost}"
+  fi
+  if [ -n "${SUB_AGENT_LINES:-}" ]; then
+    echo "$SUB_AGENT_LINES" | while IFS='|' read -r _prefix cost turns inp outp cw cr descs; do
+      local model="${_prefix#SUB:}"
+      local desc_part=""
+      [ -n "$descs" ] && desc_part=" — ${descs}"
+      echo -e "  Sub:      ${model} | \$${cost}${desc_part}"
+    done
+  fi
 else
   echo -e "  Cost:     \$${DISPLAY_COST} (estimated)"
 fi

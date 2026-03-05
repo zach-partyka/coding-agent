@@ -1,6 +1,8 @@
-# Ralph Starter Kit - Examples and Setup Guides
+# Ralph — Examples and detailed guides
 
-Detailed examples and configuration guides for different project types and workflows.
+> **New to Ralph?** Start with `README.md`. This doc goes deeper into specific project types, workflow patterns, and troubleshooting. You probably won't need it until you've run a few sprints.
+
+Detailed walkthroughs for different project types and workflow patterns.
 
 ---
 
