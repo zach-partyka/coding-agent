@@ -648,8 +648,8 @@ Check deploy target logs for errors.
 
 **Scripts:**
 - `scripts/setup.sh` - Interactive project setup (run once per project)
-- `scripts/ralph.sh` - Project launcher (copied to your project root by setup.sh)
-- `scripts/ralph-continuous.sh` - Continuous sprint orchestrator (opens a new terminal tab per task)
+- `scripts/ralph.sh` - Runs one task from sprint_plan.md and stops (copied to your project root by setup.sh)
+- `scripts/ralph-continuous.sh` - Runs all tasks from sprint_plan.md, opening a new terminal tab per task
 - `scripts/ralph-task-wrapper.sh` - Per-task runner called by ralph-continuous.sh (handles UI, cost tracking, post-processing)
 - `scripts/install-ralph-skills.sh` - Installs Ralph skills into `~/.claude/skills/` from the ralph-skills repo
 
