@@ -2,16 +2,18 @@
 
 Ralph is an AI agent that builds software for you. You describe what you want, Ralph implements it, deploys it to your test environment, and lets you review the live result — all in one sitting.
 
-**New app that isn't deployed yet?** Get your infrastructure set up first: [ONBOARDING.md →](ONBOARDING.md)
-
 ---
 
 ## Get started
 
-Choose your platform:
+**Step 1 — Set up Ralph** (choose your platform):
 
 - **[Mac users → README-MAC.md](README-MAC.md)**
 - **[Windows users → README-WINDOWS.md](README-WINDOWS.md)**
+
+**Step 2 — Get your app infrastructure ready:**
+
+- **[New app setup guide → ONBOARDING.md](ONBOARDING.md)** — deploy your app, wire up CI/CD, add tests
 
 ---
 

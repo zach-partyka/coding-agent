@@ -6,8 +6,6 @@ Ralph is an AI agent that builds software for you. You describe what you want, R
 
 **With Ralph:** Describe what you want → Ralph builds and deploys it → you review the live result. One sitting.
 
-**New app that isn't deployed yet?** Get your infrastructure set up first: [ONBOARDING.md →](ONBOARDING.md)
-
 ---
 
 ## How it works
