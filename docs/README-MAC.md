@@ -57,17 +57,21 @@ git clone https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit.git ~/Docume
 
 Once you have everything above, the setup takes about 5 minutes.
 
-**Step 1:** Open Terminal and navigate to your project folder:
+**Step 1:** Get your project's code on your machine. If you haven't cloned it yet:
+```bash
+git clone https://gitlab.zgtools.net/your-team/your-project.git ~/Documents/your-project
+cd ~/Documents/your-project
+```
+If you already have it cloned, open Terminal and navigate to it:
 ```bash
 cd ~/path/to/your/project
 ```
-(Replace with the actual path. If you're not sure, ask the engineer on your team where the code lives.)
 
-**Step 2:** Run the setup script:
+**Step 2:** Run the setup script from inside that folder:
 ```bash
-~/Documents/ralph-starter-kit/scripts/setup.sh
+.../ralph-starter-kit/scripts/setup.sh
 ```
-(Adjust the path if you put the starter kit somewhere else.)
+(Replace `...` with wherever you put the starter kit, e.g. `~/Documents/ralph-starter-kit/scripts/setup.sh`)
 
 The script will ask you a few questions about your project — staging URL, what language the code is in, etc. It auto-detects most things. When in doubt, press Enter to accept the defaults.
 
@@ -201,7 +205,7 @@ Claude Code isn't installed. See [What you need](#1-claude-code) above.
 **"`/ralph` not found":**
 The Ralph skills aren't installed. Run the setup script again:
 ```bash
-~/Documents/ralph-starter-kit/scripts/setup.sh
+.../ralph-starter-kit/scripts/setup.sh
 ```
 
 **Git credential errors:**
