@@ -76,8 +76,60 @@ done
 echo "=== Ralph Starter Kit Setup ==="
 echo ""
 
-# Get current directory
-PROJECT_DIR="$(pwd)"
+# Resolve starter kit directory early (needed for project detection guard below)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+STARTER_KIT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Get project directory
+CURRENT_DIR="$(pwd)"
+if [ -d "$CURRENT_DIR/.git" ] && [ "$CURRENT_DIR" != "$STARTER_KIT_DIR" ]; then
+  # Already inside a git repo that isn't the starter kit — use it
+  PROJECT_DIR="$CURRENT_DIR"
+else
+  # Not in a project repo — find candidates in ~/Documents
+  echo "Which project directory should I set up Ralph in?"
+  echo ""
+
+  GIT_PROJECTS=()
+  while IFS= read -r git_dir; do
+    project="$(dirname "$git_dir")"
+    # Exclude the starter kit itself
+    [ "$project" != "$STARTER_KIT_DIR" ] && GIT_PROJECTS+=("$project")
+  done < <(find "$HOME/Documents" -name ".git" -maxdepth 4 -type d 2>/dev/null | head -n 10)
+
+  if [ ${#GIT_PROJECTS[@]} -gt 0 ]; then
+    echo "Found git projects:"
+    echo ""
+    for i in "${!GIT_PROJECTS[@]}"; do
+      echo "  $((i+1))) ${GIT_PROJECTS[$i]}"
+    done
+    echo ""
+    echo "  0) Enter a different path"
+    echo ""
+    read -p "Select [1-${#GIT_PROJECTS[@]}] or 0: " selection
+
+    if [ "$selection" = "0" ]; then
+      read -p "Enter path: " PROJECT_DIR
+      PROJECT_DIR="${PROJECT_DIR/#\~/$HOME}"
+    elif [ "$selection" -ge 1 ] 2>/dev/null && [ "$selection" -le ${#GIT_PROJECTS[@]} ]; then
+      PROJECT_DIR="${GIT_PROJECTS[$((selection-1))]}"
+    else
+      echo "Invalid selection. Exiting."
+      exit 1
+    fi
+  else
+    echo "No git projects found in ~/Documents. Enter path manually:"
+    read -p "> " PROJECT_DIR
+    PROJECT_DIR="${PROJECT_DIR/#\~/$HOME}"
+  fi
+
+  if [ -z "$PROJECT_DIR" ] || [ ! -d "$PROJECT_DIR" ]; then
+    echo "Invalid directory. Exiting."
+    exit 1
+  fi
+
+  cd "$PROJECT_DIR"
+fi
 
 # Check if already set up
 if [ -f "$PROJECT_DIR/ralph.config.sh" ]; then
@@ -222,10 +274,6 @@ echo ""
 echo ""
 echo "=== Generating Files ==="
 echo ""
-
-# Get script directory
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-STARTER_KIT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Create ralph.config.sh
 echo "Creating ralph.config.sh..."
