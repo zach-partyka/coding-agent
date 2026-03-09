@@ -271,7 +271,7 @@ echo "✓ Created ralph.config.sh"
 
 # Copy ralph.sh launcher
 echo "Copying ralph.sh..."
-cp "$STARTER_KIT_DIR/template/ralph.sh" "$PROJECT_DIR/ralph.sh"
+cp "$STARTER_KIT_DIR/scripts/ralph.sh" "$PROJECT_DIR/ralph.sh"
 chmod +x "$PROJECT_DIR/ralph.sh"
 echo "✓ Created ralph.sh"
 
