@@ -647,9 +647,11 @@ Check deploy target logs for errors.
 - `examples/nodejs-typescript/` - Node.js/TypeScript reference
 
 **Scripts:**
-- `scripts/setup.sh` - Interactive project setup
-- `scripts/validate.sh` - Configuration validator (coming soon)
-- `scripts/migrate.sh` - Migration helper (coming soon)
+- `scripts/setup.sh` - Interactive project setup (run once per project)
+- `scripts/ralph.sh` - Project launcher (copied to your project root by setup.sh)
+- `scripts/ralph-continuous.sh` - Continuous sprint orchestrator (opens a new terminal tab per task)
+- `scripts/ralph-task-wrapper.sh` - Per-task runner called by ralph-continuous.sh (handles UI, cost tracking, post-processing)
+- `scripts/install-ralph-skills.sh` - Installs Ralph skills into `~/.claude/skills/` from the ralph-skills repo
 
 **Questions or Issues:**
 Report at: [Your GitLab Issues URL]
