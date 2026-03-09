@@ -17,6 +17,6 @@ Ralph is an AI agent that builds software for you. You describe what you want, R
 
 ---
 
-Questions? Reach out to Zach Partyka (zpartyka@zillow.com).
+Questions? Open an issue at [gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit](https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit/-/issues).
 
 Internal Zillow use only.
