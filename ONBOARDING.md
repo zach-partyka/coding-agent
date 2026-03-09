@@ -6,16 +6,28 @@ If your app is already deployed with a test URL and a GitLab pipeline, skip to [
 
 ---
 
-## What you need by the end of this guide
+## Progress tracker
 
-- Your app running at a shared URL teammates can hit (e.g. `https://your-app-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net`)
-- A GitLab pipeline that automatically deploys your app when you push to `main`
-- A test suite (Playwright) that runs against that URL
-- Secrets managed through Zodiac so nothing is hardcoded
+Check these off as you go:
+
+- [ ] **Step 1** — App built and running locally (~2–4 hrs, you)
+- [ ] **Step 2** — Data and Databricks set up (~1–2 hrs, you) *(skip if no Databricks)*
+- [ ] **Step 3** — Containerized + CI/CD pipeline (~1–2 days, you + Delivery/CI)
+- [ ] **Step 4** — Deployed to Kubernetes (~1 day, you + Delivery/CI)
+- [ ] **Step 5** — ZGAI connected (~2–3 days, you + platform team) *(skip if no AI)*
+- [ ] **Step 6** — Secrets in Zodiac + Keeper (~1 hr, you)
+- [ ] **Step 7** — Accounts working, URL shared (~30 min, you)
+- [ ] **Step 8** — Playwright tests wired into CI (~2–3 hrs, you)
+
+**Total:** ~1–2 weeks end-to-end, mostly waiting on approvals from other teams.
 
 ---
 
 ## Step 1 — Build the app and set up the repo
+
+**Who:** You
+**Time:** 2–4 hours
+**Blockers:** None — this is fully in your control
 
 Stand up your app and get it into a GitLab repo under your team's group (e.g. `gitlab.zgtools.net/tpm_cdp_team/your-app`).
 
@@ -31,49 +43,53 @@ npm run dev
 
 Document what goes in `.env` — every required variable, what it does, and where to get the value. This saves everyone who onboards after you.
 
-**What "done" looks like:** Anyone on your team can clone the repo, fill in `.env`, and see the app running at `localhost:3000` (or wherever) within 15 minutes.
+**Done when:** Anyone on your team can clone the repo, fill in `.env`, and see the app running at `localhost:3000` within 15 minutes.
 
 ---
 
-## Step 2 — Set up data and backend jobs (if your app needs it)
+## Step 2 — Set up data and backend jobs *(skip if no Databricks)*
+
+**Who:** You
+**Time:** 1–2 hours
+**Blockers:** None if you already have Databricks access
 
 If your app reads from or writes to Databricks:
 
-1. Create the tables your app needs. For Marketing Copilot this was:
+1. Create the tables your app needs:
    ```sql
-   CREATE TABLE IF NOT EXISTS sandbox_marketing.marketing_copilot (
+   CREATE TABLE IF NOT EXISTS sandbox_marketing.your_app (
      -- your schema here
    );
    ```
 
-2. Create a Databricks job to handle any scheduled data work (availability checks, notebook runs, SQL tasks). Tag it so platform tooling recognizes it:
+2. Create a Databricks job for any scheduled data work (availability checks, notebook runs, SQL tasks). Tag it so platform tooling recognizes it:
    - `Service: your-app`
    - `Team: your-team`
 
 3. Add the Databricks connection details to your `.env.example` so teammates know they're needed.
 
-**What "done" looks like:** Your app can read and write data without errors. The Databricks job runs on schedule.
+**Done when:** Your app can read and write data without errors. The Databricks job runs on schedule.
 
 ---
 
 ## Step 3 — Containerize the app and set up CI/CD
 
-This is what allows GitLab to build and deploy your app automatically every time you push.
+**Who:** You + Delivery/CI team
+**Time:** 1–2 days (including wait time for Delivery/CI)
+**Blockers:** Delivery/CI needs to set up Artifactory repos and grant deploy permissions — file these requests early
 
-**Get Artifactory Docker repos set up:**
+This is what allows GitLab to automatically build and deploy your app every time you push to `main`.
 
-Ask someone on Delivery/CI to create Artifactory Docker repos for your team group (`tpm_cdp_team` or equivalent) and add the required GitLab CI variables to your project. Without this, your pipeline will fail when it tries to push Docker images.
+**First: file requests with Delivery/CI (do this before writing any code)**
 
-You'll need these GitLab CI variables set (Delivery/CI will know what these are):
-- `ARTIFACTORY_USER`
-- `ARTIFACTORY_PASSWORD`
-- `ARTIFACTORY_REGISTRY`
+Ask Delivery/CI to:
+1. Create Artifactory Docker repos for your team group (`tpm_cdp_team` or equivalent)
+2. Add the required GitLab CI variables to your project (`ARTIFACTORY_USER`, `ARTIFACTORY_PASSWORD`, `ARTIFACTORY_REGISTRY`)
+3. Grant deploy permissions for your GitLab pipeline to the consumer nonprod Kubernetes cluster
 
-**Get deploy permissions:**
+Without these, your pipeline will fail when it tries to push Docker images or deploy.
 
-Ask Delivery/CI to grant deploy permissions for your GitLab pipeline to the target Kubernetes cluster. Without this, the pipeline builds the image but can't deploy it.
-
-**Add a `Dockerfile` to your repo:**
+**Then: add a `Dockerfile` to your repo**
 
 ```dockerfile
 FROM node:18-alpine
@@ -87,15 +103,19 @@ CMD ["npm", "start"]
 
 Adjust for your stack (Python, Go, etc.).
 
-**Add a `.gitlab-ci.yml`:**
+**Then: add a `.gitlab-ci.yml`**
 
 Start with the standard Zillow CI template and add build + deploy stages. Delivery/CI can share a working example for your cluster.
 
-**What "done" looks like:** Every push to `main` builds a Docker image, pushes it to Artifactory, and triggers a deploy. You can see the pipeline pass in GitLab → CI/CD → Pipelines.
+**Done when:** Every push to `main` builds a Docker image, pushes it to Artifactory, and triggers a deploy. You can see the pipeline pass in GitLab → CI/CD → Pipelines.
 
 ---
 
 ## Step 4 — Deploy into Kubernetes (consumer nonprod)
+
+**Who:** You + Delivery/CI team
+**Time:** ~1 day
+**Blockers:** Depends on Step 3 being complete
 
 Once your pipeline can build and push images, wire it to deploy into the **consumer nonprod Kubernetes cluster**.
 
@@ -104,26 +124,29 @@ Once your pipeline can build and push images, wire it to deploy into the **consu
    ```
    https://your-app-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net
    ```
-3. Add a `/health` endpoint to your app that returns HTTP 200 — Ralph uses this to confirm deploys succeeded:
+3. Add a `/health` endpoint to your app — Ralph uses this to confirm deploys succeeded:
    ```typescript
    app.get('/health', (req, res) => res.json({ status: 'healthy' }));
    ```
 
-**What "done" looks like:** Push to `main`, wait ~5 minutes, hit your app's URL in a browser and see it running. No local setup required for teammates.
+**Done when:** Push to `main`, wait ~5 minutes, hit your app's URL in a browser and see it running. No local setup required for teammates.
 
 ---
 
-## Step 5 — Connect to ZGAI (if your app uses AI)
+## Step 5 — Connect to ZGAI *(skip if your app doesn't use AI)*
 
-If your app calls the Zillow internal LLM API (ZGAI), you need to get it allowlisted and get an API key before any AI calls will work.
+**Who:** You + platform team
+**Time:** 2–3 days (approval + Terraform automation)
+**Blockers:** Two separate requests, each with wait time — file them in parallel
 
-**Get added to the SERVICE_ALLOWLIST:**
+If your app calls the Zillow internal LLM API (ZGAI), you need to be allowlisted and get an API key before any AI calls will work.
+
+**Request 1: Get added to the SERVICE_ALLOWLIST**
 
 File a request to get your app added to the `SERVICE_ALLOWLIST` for `zgai-llm-api`. This is required before ZGAI will accept calls from your service in nonprod. Ask your team's platform contact or check the ZGAI onboarding docs.
 
-**Request a Kong consumer and API key:**
+**Request 2: Get a Kong consumer and API key via Zodiac**
 
-Use the **Zodiac Operational Request** for Kong:
 1. Go to Zodiac → your service → Operational Requests
 2. Select **Kong – API Key**
 3. Fill in:
@@ -131,17 +154,24 @@ Use the **Zodiac Operational Request** for Kong:
    - `Sub-environment`: `stage`
 4. Submit. Automation runs Terraform plan/apply and provisions the key.
 
-The key will be called something like `your-app-zgai-llm-api-stage`.
+The key will be named something like `your-app-zgai-llm-api-stage`.
 
-**What "done" looks like:** You have an API key and ZGAI calls from your app return responses instead of 401/403 errors.
+**Done when:** ZGAI calls from your app return actual responses instead of 401/403 errors.
 
 ---
 
 ## Step 6 — Store secrets in Zodiac + Keeper
 
+**Who:** You
+**Time:** ~1 hour
+**Blockers:** Depends on Step 5 if you have ZGAI keys to store
+
 Never hardcode API keys. Here's the right way to manage them at Zillow:
 
-1. **Copy the key into Keeper** — store it in your team's shared Keeper folder so others can find it if needed.
+1. **Copy the key into Keeper** — store it in your team's shared folder so anyone can find it:
+   ```
+   Keeper → tpm_cdp_team → your-app → ZGAI_API_KEY
+   ```
 
 2. **Add it as a nonprod secret in Zodiac:**
    - Go to Zodiac → your service → Secrets
@@ -150,32 +180,38 @@ Never hardcode API keys. Here's the right way to manage them at Zillow:
 
 3. **Add the variable name (not the value) to `.env.example`** so teammates know it's required locally:
    ```
-   ZGAI_API_KEY=           # get from Keeper: tpm_cdp_team/your-app
+   ZGAI_API_KEY=     # get from Keeper: tpm_cdp_team/your-app
    ```
 
-**What "done" looks like:** Your deployed app reads secrets from the environment. No credentials are checked into git. Teammates can find values in Keeper.
+**Done when:** Your deployed app reads secrets from the environment. No credentials are checked into git. Teammates can find values in Keeper.
 
 ---
 
 ## Step 7 — Enable accounts and share access
 
-Once the app is deployed:
+**Who:** You
+**Time:** ~30 minutes
+**Blockers:** Depends on Steps 4–6 being complete
 
-1. Make sure user creation works end-to-end (sign up, log in, create content — whatever your app's core flow is).
-2. Confirm user data is being stored correctly (Databricks tables, Drizzle ORM, wherever it goes).
-3. Share the dev URL with your team:
+1. Verify the core user flow works end-to-end: sign up, log in, create something, see it saved.
+2. Confirm data is being stored correctly (Databricks, Drizzle ORM, wherever it goes).
+3. Share the URL with your team:
    ```
    App URL: https://your-app-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net
    Sign in with your Zillow credentials.
    ```
 
-**What "done" looks like:** Teammates can hit the URL, create an account, and use the app without any help from you.
+**Done when:** Teammates can hit the URL, create an account, and use the app without asking you anything.
 
 ---
 
 ## Step 8 — Add Playwright tests and wire them into CI
 
-This is what lets Ralph verify that its changes didn't break anything.
+**Who:** You
+**Time:** 2–3 hours
+**Blockers:** None — do this any time after Step 4
+
+This is what lets Ralph verify its changes didn't break anything.
 
 **Install Playwright:**
 
@@ -184,7 +220,7 @@ npm install --save-dev @playwright/test
 npx playwright install chromium
 ```
 
-**Write smoke tests** covering the critical paths (auth, core user flows, key UI elements):
+**Write smoke tests** covering your critical paths (auth, core user flows, key UI elements):
 
 ```typescript
 // tests/smoke.spec.ts
@@ -237,7 +273,7 @@ test:
     - main
 ```
 
-**What "done" looks like:** Push to `main`, pipeline builds → deploys → runs tests against the live URL. You see green checkmarks in GitLab CI.
+**Done when:** Push to `main` — pipeline builds → deploys → runs tests against the live URL. Green checkmarks in GitLab CI.
 
 ---
 
