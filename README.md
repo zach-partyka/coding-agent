@@ -8,8 +8,8 @@ Ralph is an AI agent that builds software for you. You describe what you want, R
 
 **Step 1 — Set up Ralph** (choose your platform):
 
-- **[Mac users → README-MAC.md](README-MAC.md)**
-- **[Windows users → README-WINDOWS.md](README-WINDOWS.md)**
+- **[Mac users → docs/README-MAC.md](docs/README-MAC.md)**
+- **[Windows users → docs/README-WINDOWS.md](docs/README-WINDOWS.md)**
 
 **Step 2 — Get your app infrastructure ready:**
 
