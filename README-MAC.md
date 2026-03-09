@@ -6,8 +6,6 @@ Ralph is an AI agent that builds software for you. You describe what you want, R
 
 **With Ralph:** Describe what you want → Ralph builds and deploys it → you review the live result. One sitting.
 
-Ralph has run 37 sprints on a real production app (Marketing Copilot), totaling ~$400 in AI costs vs ~$13,000 at engineer rates — a 96%+ cost reduction.
-
 ---
 
 ## How it works
