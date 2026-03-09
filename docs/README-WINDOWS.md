@@ -101,6 +101,16 @@ bash ~/Documents/ralph-starter-kit/scripts/setup.sh
 
 The script will ask you a few questions about your project — staging URL, what language the code is in, etc. It auto-detects most things. When in doubt, press Enter to accept the defaults.
 
+**What's in the starter kit scripts:**
+
+| Script | What it does |
+|--------|--------------|
+| `setup.sh` | One-time setup — asks questions, creates config files, installs skills |
+| `ralph.sh` | Project launcher — copied to your project root by setup.sh |
+| `ralph-continuous.sh` | Runs all tasks in the sprint, opening a new terminal tab per task |
+| `ralph-task-wrapper.sh` | Runs inside each tab — handles the UI, cost tracking, and post-processing |
+| `install-ralph-skills.sh` | Reinstalls Ralph skills into `~/.claude/skills/` if needed |
+
 **What setup creates:**
 
 | File | What it's for |
