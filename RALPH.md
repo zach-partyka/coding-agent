@@ -62,6 +62,24 @@ Spawn subagents for codebase search, investigation tasks, validation, and test r
 
 ---
 
+## stdlib/ — Technical Patterns
+
+The `stdlib/` directory contains coding patterns Ralph follows when building. Setup installs baseline patterns from the starter kit:
+
+| File | What It Covers |
+|---|---|
+| `security.md` | Never hardcode secrets, .env patterns, pre-commit hooks |
+| `documentation.md` | Doc-in-the-loop — when and how to add docs |
+| `testing-playwright.md` | Selector priority, async waits, visual validation, POM |
+| `validation.md` | Schema as source of truth, safe field additions, boundary validation |
+| `api-routes.md` | Auth → Validate → Execute → Respond, error handling |
+
+**Customizing:** Edit these for your stack (e.g. replace Zod examples with Yup, add framework-specific patterns). Add project-specific patterns as new files (e.g. `databricks_patterns.md`, `graphql_patterns.md`).
+
+Ralph reads stdlib/ during every task (Step 3 in the skill). If it violates a pattern, update the file with the correction.
+
+---
+
 ## Learned Lessons
 
 *Ralph adds lessons here as it learns patterns specific to this project. One to two sentences per entry — technical insight only, no storytelling.*

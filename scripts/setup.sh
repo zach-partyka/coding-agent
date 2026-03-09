@@ -402,6 +402,25 @@ mkdir -p "$PROJECT_DIR/stdlib"
 mkdir -p "$PROJECT_DIR/sprints"
 echo "✓ Created specs/, stdlib/, sprints/"
 
+# Copy stdlib templates (only files that don't already exist)
+if [ -d "$STARTER_KIT_DIR/template/stdlib" ]; then
+  echo "Installing stdlib patterns..."
+  STDLIB_COUNT=0
+  for pattern_file in "$STARTER_KIT_DIR/template/stdlib"/*.md; do
+    filename="$(basename "$pattern_file")"
+    if [ ! -f "$PROJECT_DIR/stdlib/$filename" ]; then
+      cp "$pattern_file" "$PROJECT_DIR/stdlib/"
+      echo "✓ Installed stdlib/$filename"
+      STDLIB_COUNT=$((STDLIB_COUNT + 1))
+    else
+      echo "✓ stdlib/$filename already exists"
+    fi
+  done
+  if [ "$STDLIB_COUNT" -gt 0 ]; then
+    echo "  Installed $STDLIB_COUNT stdlib pattern files. Customize for your project."
+  fi
+fi
+
 # Copy sprint templates
 if [ ! -f "$PROJECT_DIR/sprints/sprint_history.md" ]; then
   cp "$STARTER_KIT_DIR/template/sprints/sprint_history.md" "$PROJECT_DIR/sprints/sprint_history.md"
@@ -418,7 +437,7 @@ echo "  ✓ RALPH.md (build instructions)"
 echo "  ✓ roadmap.md (product roadmap — Now/Next/Later)"
 echo "  ✓ sprint_plan.md (sprint tracker)"
 echo "  ✓ specs/ (feature specifications)"
-echo "  ✓ stdlib/ (technical patterns)"
+echo "  ✓ stdlib/ (technical patterns — security, testing, validation, docs, API routes)"
 echo "  ✓ sprints/ (sprint archives + history)"
 echo "  ✓ ralph-continuous.sh available at $GLOBAL_RALPH_DIR/"
 echo ""
@@ -494,7 +513,7 @@ echo ""
 echo "1. Customize RALPH.md with your project's build/test instructions"
 echo "2. Add items to roadmap.md (Now section = ready for sprints)"
 echo "3. Add specs to specs/ directory"
-echo "4. Add technical patterns to stdlib/ directory"
+echo "4. Review stdlib/ patterns — customize for your stack, add project-specific patterns"
 echo "5. Run your first sprint:"
 echo ""
 echo "   Option A (with hotkey): Press Shift+Cmd+R"

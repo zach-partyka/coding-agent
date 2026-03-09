@@ -154,16 +154,21 @@ export RALPH_VALIDATE_LOCAL="python -m ruff check src/ && python -m mypy src/ &&
 export RALPH_VALIDATE_DEPLOY="python -m pytest tests/integration/ -v"
 ```
 
-**3. Review example patterns**
+**3. Review installed patterns**
+
+Setup installs baseline stdlib patterns automatically. Review and customize them:
 ```bash
-# See FastAPI patterns
-cat examples/python-fastapi/stdlib/fastapi_patterns.md
+ls stdlib/                      # See installed patterns
+cat stdlib/security.md          # Secrets & .env patterns
+cat stdlib/testing-playwright.md # Playwright E2E patterns
+cat stdlib/api-routes.md        # Route patterns (generalized — add FastAPI-specific)
+cat stdlib/validation.md        # Schema validation (includes Pydantic examples)
+```
 
-# See testing patterns
-cat examples/python-fastapi/stdlib/testing_patterns.md
-
-# See example spec
-cat examples/python-fastapi/specs/user_api.md
+Add a project-specific file for FastAPI patterns:
+```bash
+# Create stdlib/fastapi_patterns.md with your dependency injection,
+# async session, and Pydantic conventions
 ```
 
 ### FastAPI-Specific Patterns
@@ -288,14 +293,18 @@ export RALPH_VALIDATE_LOCAL="npm run check"
 export RALPH_VALIDATE_DEPLOY="STAGING_URL=\$RALPH_DEPLOY_URL npm test"
 ```
 
-**3. Review example patterns**
-```bash
-# Express patterns
-cat examples/nodejs-typescript/stdlib/express_patterns.md
+**3. Review installed patterns**
 
-# Playwright testing
-cat examples/nodejs-typescript/stdlib/testing_patterns.md
+Setup installs baseline stdlib patterns automatically. Review and customize them:
+```bash
+ls stdlib/                      # See installed patterns
+cat stdlib/api-routes.md        # Express route patterns (auth → validate → execute → respond)
+cat stdlib/testing-playwright.md # Playwright E2E patterns
+cat stdlib/validation.md        # Zod schema patterns
+cat stdlib/security.md          # Secrets & .env patterns
 ```
+
+Add project-specific patterns as needed (e.g. `stdlib/drizzle_patterns.md` for ORM conventions).
 
 ### Node.js-Specific Patterns
 
