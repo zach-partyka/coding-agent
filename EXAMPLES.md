@@ -149,9 +149,9 @@ Should look like:
 ```bash
 export RALPH_GIT_REMOTE="https://gitlab.zgtools.net/your-team/your-app.git"
 export RALPH_GIT_MAIN_BRANCH="main"
-export RALPH_STAGING_URL="https://your-app-staging.zgtools.net"
+export RALPH_DEPLOY_URL="https://your-app-dev.your-domain.com"
 export RALPH_VALIDATE_LOCAL="python -m ruff check src/ && python -m mypy src/ && python -m pytest tests/unit/"
-export RALPH_VALIDATE_STAGING="python -m pytest tests/integration/ -v"
+export RALPH_VALIDATE_DEPLOY="python -m pytest tests/integration/ -v"
 ```
 
 **3. Review example patterns**
@@ -283,9 +283,9 @@ cat ralph.config.sh
 Should look like:
 ```bash
 export RALPH_GIT_REMOTE="https://gitlab.zgtools.net/your-team/your-app.git"
-export RALPH_STAGING_URL="https://your-app-staging.zgtools.net"
+export RALPH_DEPLOY_URL="https://your-app-dev.your-domain.com"
 export RALPH_VALIDATE_LOCAL="npm run check"
-export RALPH_VALIDATE_STAGING="STAGING_URL=\$RALPH_STAGING_URL npm test"
+export RALPH_VALIDATE_DEPLOY="STAGING_URL=\$RALPH_DEPLOY_URL npm test"
 ```
 
 **3. Review example patterns**
@@ -396,8 +396,8 @@ Recommended fix order: [1, 3, 2] (based on impact/effort)
   - Files to check: header.tsx, mobile-nav.tsx, landing.tsx
   - Validation:
     1. Commit changes
-    2. Wait for staging deploy (5 min)
-    3. Open staging in browser
+    2. Wait for deploy (5 min)
+    3. Open deploy target in browser
     4. Visually confirm headline changed
     5. Check `git status` for uncommitted files
 ```
@@ -532,8 +532,8 @@ chmod +x ralph.config.sh
 Test config loads:
 ```bash
 source ralph.config.sh
-echo $RALPH_STAGING_URL
-# Should print your staging URL
+echo $RALPH_DEPLOY_URL
+# Should print your deploy target URL
 ```
 
 **Issue: Skills use wrong values**
@@ -546,7 +546,7 @@ Skills need updating to read env vars. Check:
 
 Workaround: Set env vars before running:
 ```bash
-export RALPH_STAGING_URL="https://your-app.com"
+export RALPH_DEPLOY_URL="https://your-app.com"
 claude "/ralph-continuous"
 ```
 
@@ -605,13 +605,13 @@ git config --global credential.helper osxkeychain
 # Use token as password when prompted
 ```
 
-### Staging Deployment Issues
+### Deployment Issues
 
 **Issue: Health check fails**
 
-Verify staging URL:
+Verify deploy target URL:
 ```bash
-curl https://your-app-staging.zgtools.net/health
+curl https://your-app-dev.your-domain.com/health
 # Should return 200 with {"status":"healthy"}
 ```
 
@@ -621,17 +621,17 @@ Check deploy wait time:
 export RALPH_DEPLOY_WAIT_SECONDS=600  # 10 minutes
 ```
 
-**Issue: Tests fail on staging**
+**Issue: Tests fail on deploy target**
 
 Run tests manually:
 ```bash
-STAGING_URL=https://your-app-staging.zgtools.net npm test
+STAGING_URL=https://your-app-dev.your-domain.com npm test
 
 # Or for Python:
-STAGING_URL=https://your-app-staging.zgtools.net python -m pytest tests/integration/
+STAGING_URL=https://your-app-dev.your-domain.com python -m pytest tests/integration/
 ```
 
-Check staging logs for errors.
+Check deploy target logs for errors.
 
 ---
 

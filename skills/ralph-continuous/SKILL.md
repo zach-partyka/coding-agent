@@ -132,7 +132,7 @@ NO action needed - tracking happens automatically in each `/ralph` invocation. S
 - Test requirement detection (step 5.75)
 - **Testing hygiene (step 6.5)** - Update tests inline with UI/API/flow changes
 - Playwright AI test generation (via playwright-test-generator agent)
-- E2E test execution against staging (step 10)
+- E2E test execution against the deploy target (step 10)
 - Test healing when tests fail (via playwright-test-healer agent)
 
 **Why stdlib/testing-patterns.md matters:**
@@ -208,7 +208,7 @@ Uses `--dangerously-skip-permissions` for auto-approval.
 - Edited wrong component (similar UI in multiple files)
 
 **After ralph-continuous completes, always:**
-1. Open staging in browser
+1. Open the deploy target in browser
 2. Visually verify UI changes
 3. Run `git status` to check for uncommitted changes
 
@@ -226,7 +226,7 @@ Each task invoked by ralph-continuous uses the base `/ralph` skill, which includ
 - Generated tests saved to `tests/*.spec.ts`
 
 **Test Execution (Step 10):**
-- Runs `npm test` against staging after deployment
+- Runs `npm test` against the deploy target after deployment
 - All E2E tests must pass before task is marked complete
 
 **Test Healing (Step 10):**

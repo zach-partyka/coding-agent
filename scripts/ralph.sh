@@ -42,9 +42,9 @@ if [ -z "$RALPH_GIT_REMOTE" ]; then
   exit 1
 fi
 
-if [ -z "$RALPH_STAGING_URL" ]; then
-  echo "ERROR: RALPH_STAGING_URL not set in ralph.config.sh"
-  echo "Set the staging environment URL (e.g., 'https://app-staging.domain.com')"
+if [ -z "$RALPH_DEPLOY_URL" ]; then
+  echo "ERROR: RALPH_DEPLOY_URL not set in ralph.config.sh"
+  echo "Set the deploy target URL (e.g., 'https://app-dev.domain.com')"
   exit 1
 fi
 
@@ -52,7 +52,7 @@ fi
 RALPH_GIT_MAIN_BRANCH="${RALPH_GIT_MAIN_BRANCH:-main}"
 RALPH_DEPLOY_WAIT_SECONDS="${RALPH_DEPLOY_WAIT_SECONDS:-300}"
 RALPH_VALIDATE_LOCAL="${RALPH_VALIDATE_LOCAL:-echo 'No local validation configured'}"
-RALPH_VALIDATE_STAGING="${RALPH_VALIDATE_STAGING:-echo 'No staging validation configured'}"
+RALPH_VALIDATE_DEPLOY="${RALPH_VALIDATE_DEPLOY:-echo 'No deploy validation configured'}"
 RALPH_HEALTH_CHECK_PATH="${RALPH_HEALTH_CHECK_PATH:-/health}"
 RALPH_TASK_TIMEOUT_MINUTES="${RALPH_TASK_TIMEOUT_MINUTES:-15}"
 RALPH_AUTO_ARCHIVE="${RALPH_AUTO_ARCHIVE:-true}"
@@ -60,10 +60,10 @@ RALPH_AUTO_ARCHIVE="${RALPH_AUTO_ARCHIVE:-true}"
 # Export all config for skills to access
 export RALPH_GIT_REMOTE
 export RALPH_GIT_MAIN_BRANCH
-export RALPH_STAGING_URL
+export RALPH_DEPLOY_URL
 export RALPH_DEPLOY_WAIT_SECONDS
 export RALPH_VALIDATE_LOCAL
-export RALPH_VALIDATE_STAGING
+export RALPH_VALIDATE_DEPLOY
 export RALPH_HEALTH_CHECK_PATH
 export RALPH_TASK_TIMEOUT_MINUTES
 export RALPH_AUTO_ARCHIVE
@@ -96,7 +96,7 @@ fi
 echo "=== Ralph Wiggum Loop ==="
 echo "Mode: $MODE"
 echo "Project: $(pwd)"
-echo "Staging: $RALPH_STAGING_URL"
+echo "Deploy target: $RALPH_DEPLOY_URL"
 echo ""
 
 # Get project directory (current directory)

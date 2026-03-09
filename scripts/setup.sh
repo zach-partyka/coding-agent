@@ -148,11 +148,11 @@ fi
 
 echo ""
 
-# Staging Configuration
-echo "=== Staging Environment ==="
+# Deploy Target Configuration
+echo "=== Deploy Environment ==="
 echo ""
 
-read -p "Enter staging URL (e.g., https://app-staging.zgtools.net): " STAGING_URL
+read -p "Enter your deploy target URL (e.g., https://your-app-dev.your-domain.com): " STAGING_URL
 
 # Deployment wait time
 DEPLOY_WAIT=300
@@ -210,7 +210,7 @@ if [ -z "$VALIDATE_LOCAL" ]; then
 fi
 
 echo ""
-echo "Staging validation command (integration tests against staging):"
+echo "Dev validation command (integration tests against your dev site):"
 echo "Default: $DEFAULT_STAGING"
 read -p "Press Enter to use default, or type custom command: " VALIDATE_STAGING
 if [ -z "$VALIDATE_STAGING" ]; then
@@ -218,11 +218,6 @@ if [ -z "$VALIDATE_STAGING" ]; then
 fi
 
 echo ""
-
-# Optional: Example files
-echo "=== Optional Setup ==="
-echo ""
-read -p "Generate example specs and stdlib? (y/n): " GEN_EXAMPLES
 
 echo ""
 echo "=== Generating Files ==="
@@ -247,12 +242,12 @@ export RALPH_GIT_REMOTE="$GIT_REMOTE"
 export RALPH_GIT_MAIN_BRANCH="$GIT_MAIN_BRANCH"
 
 # Deployment Configuration
-export RALPH_STAGING_URL="$STAGING_URL"
+export RALPH_DEPLOY_URL="$STAGING_URL"
 export RALPH_DEPLOY_WAIT_SECONDS=$DEPLOY_WAIT
 
 # Validation Commands
 export RALPH_VALIDATE_LOCAL="$VALIDATE_LOCAL"
-export RALPH_VALIDATE_STAGING="$VALIDATE_STAGING"
+export RALPH_VALIDATE_DEPLOY="$VALIDATE_STAGING"
 
 # Health check endpoint
 export RALPH_HEALTH_CHECK_PATH="$HEALTH_CHECK"
@@ -261,8 +256,8 @@ export RALPH_HEALTH_CHECK_PATH="$HEALTH_CHECK"
 # OPTIONAL CONFIGURATION
 # =============================================================================
 
-# Set staging URL as environment variable for integration tests
-export RALPH_TEST_ENV_VARS="STAGING_URL=\$RALPH_STAGING_URL"
+# Set deploy URL as environment variable for integration tests
+export RALPH_TEST_ENV_VARS="STAGING_URL=\$RALPH_DEPLOY_URL"
 
 # Task timeout in minutes (default: 15)
 # export RALPH_TASK_TIMEOUT_MINUTES=15
@@ -317,6 +312,20 @@ else
   echo "⚠️  Skills directory not found in starter kit"
 fi
 
+# Install subagents to project
+if [ -d "$STARTER_KIT_DIR/.claude/agents" ]; then
+  echo "Installing subagents..."
+  mkdir -p "$PROJECT_DIR/.claude/agents"
+  for agent in codebase-scout deep-investigator test-runner validation-runner; do
+    if [ ! -f "$PROJECT_DIR/.claude/agents/$agent.md" ]; then
+      cp "$STARTER_KIT_DIR/.claude/agents/$agent.md" "$PROJECT_DIR/.claude/agents/"
+      echo "✓ Installed $agent"
+    else
+      echo "✓ $agent already installed"
+    fi
+  done
+fi
+
 # Create sprint_plan.md if it doesn't exist
 if [ ! -f "$PROJECT_DIR/sprint_plan.md" ]; then
   echo "Creating sprint_plan.md..."
@@ -327,14 +336,8 @@ fi
 # Create RALPH.md from template
 if [ ! -f "$PROJECT_DIR/RALPH.md" ]; then
   echo "Creating RALPH.md..."
-  if [ -f "$STARTER_KIT_DIR/examples/$PROJECT_TYPE/RALPH.md" ]; then
-    # Use project-type-specific template
-    cp "$STARTER_KIT_DIR/examples/$PROJECT_TYPE/RALPH.md" "$PROJECT_DIR/RALPH.md"
-  else
-    # Use generic template
-    cp "$STARTER_KIT_DIR/template/RALPH.md.template" "$PROJECT_DIR/RALPH.md"
-  fi
-  echo "✓ Created RALPH.md (customize for your project)"
+  cp "$STARTER_KIT_DIR/RALPH.md" "$PROJECT_DIR/RALPH.md"
+  echo "✓ Created RALPH.md"
 fi
 
 # Create roadmap.md from template
@@ -355,30 +358,6 @@ echo "✓ Created specs/, stdlib/, sprints/"
 if [ ! -f "$PROJECT_DIR/sprints/sprint_history.md" ]; then
   cp "$STARTER_KIT_DIR/template/sprints/sprint_history.md" "$PROJECT_DIR/sprints/sprint_history.md"
   echo "✓ Created sprints/sprint_history.md"
-fi
-
-# Generate examples if requested
-if [ "$GEN_EXAMPLES" == "y" ]; then
-  echo "Copying example files..."
-
-  EXAMPLE_DIR="$STARTER_KIT_DIR/examples/$PROJECT_TYPE"
-  if [ "$PROJECT_TYPE" == "python" ]; then
-    EXAMPLE_DIR="$STARTER_KIT_DIR/examples/python-fastapi"
-  elif [ "$PROJECT_TYPE" == "nodejs" ]; then
-    EXAMPLE_DIR="$STARTER_KIT_DIR/examples/nodejs-typescript"
-  else
-    EXAMPLE_DIR="$STARTER_KIT_DIR/examples/generic"
-  fi
-
-  if [ -d "$EXAMPLE_DIR/specs" ]; then
-    cp -r "$EXAMPLE_DIR/specs"/* "$PROJECT_DIR/specs/" 2>/dev/null || echo "No spec examples available"
-    echo "✓ Copied example specs"
-  fi
-
-  if [ -d "$EXAMPLE_DIR/stdlib" ]; then
-    cp -r "$EXAMPLE_DIR/stdlib"/* "$PROJECT_DIR/stdlib/" 2>/dev/null || echo "No stdlib examples available"
-    echo "✓ Copied example stdlib"
-  fi
 fi
 
 echo ""
@@ -436,7 +415,7 @@ if [ "$SHOW_HOTKEY_INSTRUCTIONS" == "y" ]; then
   echo "  • Shift+Cmd+T → claude \"/ralph\"\\n          (single task)"
   echo "  • Shift+Cmd+A → claude \"/ralph-archive\"\\n  (archive sprint)"
   echo ""
-  echo "For detailed troubleshooting, see: $STARTER_KIT_DIR/EXAMPLES.md"
+  echo "For detailed troubleshooting, see: README-MAC.md"
   echo ""
 
   read -p "Open iTerm2 Preferences now? (y/n): " OPEN_ITERM_PREFS
@@ -474,8 +453,5 @@ echo "   Option A (with hotkey): Press Shift+Cmd+R"
 echo "   Option B (command):     claude \"/ralph-plan\""
 echo "   Option C (wrapper):     ./ralph.sh --plan"
 echo ""
-echo "For detailed examples and troubleshooting:"
-echo "  • Quick start: cat $STARTER_KIT_DIR/README.md"
-echo "  • Examples:    cat $STARTER_KIT_DIR/EXAMPLES.md"
-echo "  • Config ref:  cat $STARTER_KIT_DIR/CONFIGURATION_GUIDE.md"
+echo "For help: cat $STARTER_KIT_DIR/README-MAC.md"
 echo ""

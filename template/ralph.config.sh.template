@@ -14,29 +14,29 @@ export RALPH_GIT_REMOTE="https://your-git-host.com/your-team/your-project.git"
 export RALPH_GIT_MAIN_BRANCH="main"
 
 # Deployment Configuration
-# The staging environment URL where changes auto-deploy
-export RALPH_STAGING_URL="https://your-app-staging.your-domain.com"
+# The deploy target URL where changes auto-deploy
+export RALPH_DEPLOY_URL="https://your-app-dev.your-domain.com"
 
-# How long to wait for staging deployment to complete (seconds)
+# How long to wait for deployment to complete (seconds)
 export RALPH_DEPLOY_WAIT_SECONDS=300
 
 # Validation Commands
 # Command to validate code locally before committing (linting, type-checking, etc.)
 export RALPH_VALIDATE_LOCAL="npm run check"
 
-# Command to run tests against staging environment
-# Can reference $RALPH_STAGING_URL if needed
-export RALPH_VALIDATE_STAGING="npm test"
+# Command to run tests against deploy target
+# Can reference $RALPH_DEPLOY_URL if needed
+export RALPH_VALIDATE_DEPLOY="npm test"
 
-# Health check endpoint path (appended to RALPH_STAGING_URL)
+# Health check endpoint path (appended to RALPH_DEPLOY_URL)
 export RALPH_HEALTH_CHECK_PATH="/health"
 
 # =============================================================================
 # OPTIONAL CONFIGURATION
 # =============================================================================
 
-# Environment variables to set when running staging tests
-# Example: "STAGING_URL=$RALPH_STAGING_URL API_KEY=test123"
+# Environment variables to set when running deploy target tests
+# Example: "STAGING_URL=$RALPH_DEPLOY_URL API_KEY=test123"
 # export RALPH_TEST_ENV_VARS=""
 
 # Task timeout in minutes (default: 15)
@@ -55,13 +55,13 @@ export RALPH_HEALTH_CHECK_PATH="/health"
 # if [ -f "package.json" ]; then
 #   # Node.js/TypeScript project defaults
 #   RALPH_VALIDATE_LOCAL="${RALPH_VALIDATE_LOCAL:-npm run check}"
-#   RALPH_VALIDATE_STAGING="${RALPH_VALIDATE_STAGING:-npm test}"
+#   RALPH_VALIDATE_DEPLOY="${RALPH_VALIDATE_DEPLOY:-npm test}"
 # elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
 #   # Python project defaults
 #   RALPH_VALIDATE_LOCAL="${RALPH_VALIDATE_LOCAL:-python -m pytest}"
-#   RALPH_VALIDATE_STAGING="${RALPH_VALIDATE_STAGING:-python -m pytest tests/integration/}"
+#   RALPH_VALIDATE_DEPLOY="${RALPH_VALIDATE_DEPLOY:-python -m pytest tests/integration/}"
 # elif [ -f "go.mod" ]; then
 #   # Go project defaults
 #   RALPH_VALIDATE_LOCAL="${RALPH_VALIDATE_LOCAL:-go test ./...}"
-#   RALPH_VALIDATE_STAGING="${RALPH_VALIDATE_STAGING:-go test -tags=integration ./...}"
+#   RALPH_VALIDATE_DEPLOY="${RALPH_VALIDATE_DEPLOY:-go test -tags=integration ./...}"
 # fi

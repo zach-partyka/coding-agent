@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: Building mode for Ralph - implements ONE thing from sprint_plan.md and stops. Creates branch, implements per specs/stdlib, commits/pushes to GitLab, merges to main, waits for staging deploy, runs Playwright against staging. Updates sprint_plan.md and RALPH.md. Stops after one thing for human review.
+description: Building mode for Ralph - implements ONE thing from sprint_plan.md and stops. Creates branch, implements per specs/stdlib, commits/pushes to GitLab, merges to main, waits for deploy, runs Playwright against the deploy target. Updates sprint_plan.md and RALPH.md. Stops after one thing for human review.
 ---
 
 # Ralph Building Mode
@@ -133,7 +133,7 @@ If required, task is not complete until:
 - `data-testid` added to relevant UI elements
 - Playwright test written (use AI test generator if available, otherwise follow patterns in existing `tests/*.spec.ts`)
 - Test covers happy path and error states
-- Test passes against staging
+- Test passes against the deploy target
 
 If blocked on test writing, mark BLOCKED with reason.
 
@@ -149,7 +149,7 @@ npm run check
 
 TypeScript must compile. Fix errors before proceeding. Do not push broken code.
 
-We skip local E2E — real testing happens against staging.
+We skip local E2E — real testing happens against the deploy target.
 
 ### 12. Git Workflow
 
@@ -179,32 +179,32 @@ git push origin main
 
 If merge conflicts: stop, report details, mark BLOCKED. Human resolves.
 
-### 13. Wait for Staging
+### 13. Wait for Deploy
 
-Staging auto-deploys in ~5 minutes after pushing to main.
+Auto-deploys in ~5 minutes after pushing to main.
 
 ```bash
 sleep 300
-curl -s -o /dev/null -w "%{http_code}" $RALPH_STAGING_URL/health
+curl -s -o /dev/null -w "%{http_code}" $RALPH_DEPLOY_URL/health
 ```
 
 Expected: HTTP 200. If not responding, check the GitLab pipeline. If pipeline failed, BLOCK. If still running, wait 2 more minutes.
 
 ### 14. Test and Verify
 
-**A. Run Playwright against staging:**
+**A. Run Playwright against the deploy target:**
 
 ```bash
-STAGING_URL=$RALPH_STAGING_URL npm test
+STAGING_URL=$RALPH_DEPLOY_URL npm test
 ```
 
-Test against staging, not localhost. After each run, write a short test summary (e.g., "12 passed, 0 failed"). Use only this summary for decisions — do not re-paste full test output.
+Test against the deploy target, not localhost. After each run, write a short test summary (e.g., "12 passed, 0 failed"). Use only this summary for decisions — do not re-paste full test output.
 
 **B. Visual verification for UI changes:**
 
 Sprint 3 Learning: 36% of UI tasks failed because code was committed but never visually verified.
 
-1. Open staging in browser, navigate to affected page
+1. Open the deploy target in browser, navigate to affected page
 2. Confirm the change is visible (check mobile viewport if applicable)
 3. Run `git status` — if source files are modified, the change was NOT deployed
 
@@ -214,7 +214,7 @@ Do not mark UI tasks complete without visual verification.
 
 Determine if the test broke due to your code changes (heal the test with playwright-test-healer) or if your implementation has a bug (fix the code). Try up to 2 fix attempts, then BLOCK.
 
-**D. Catastrophic failure (>50% tests failing or staging unresponsive):**
+**D. Catastrophic failure (>50% tests failing or deploy target unresponsive):**
 
 ```bash
 git revert HEAD
@@ -253,7 +253,7 @@ Only if you learned something new about building/running the project — a non-o
 ```
 === Task Complete ===
 Implemented: [one-line task description]
-Validation: TypeScript, GitLab, Staging, Playwright
+Validation: TypeScript, GitLab, Deploy, Playwright
 Sprint Progress: X/Y tasks
 Next: [next task title]
 Run /ralph again to continue.
@@ -290,7 +290,7 @@ Why: LLMs are unreliable at arithmetic. Shell math is deterministic.
 
 **Item is blocked:** Specs unclear, dependency missing. Move to Blocked section, document why, pick next unblocked item.
 
-**No validation command:** Use standard validations (npm run check + Playwright against staging). Note minimal validation in completion entry.
+**No validation command:** Use standard validations (npm run check + Playwright against deploy target). Note minimal validation in completion entry.
 
 **Unrelated tests fail:** Fix them. You own green tests before marking complete.
 
@@ -302,8 +302,8 @@ Complete when:
 - ONE item implemented (not multiple)
 - TypeScript compiles
 - Committed, pushed, merged to main
-- Deployed to staging
-- Playwright tests pass against staging
+- Deployed to deploy target
+- Playwright tests pass against deploy target
 - sprint_plan.md updated
 - Code follows specs/ and stdlib/
 - User knows what's next
@@ -311,7 +311,7 @@ Complete when:
 Fails when:
 - TypeScript won't compile
 - Merge conflicts (human resolves)
-- Staging deploy fails
+- Deploy fails
 - Tests fail after 2 fix attempts
 - Placeholder implementation
 - Multiple items implemented in one run (do one open task only)

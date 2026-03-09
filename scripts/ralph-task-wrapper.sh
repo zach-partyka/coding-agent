@@ -198,10 +198,26 @@ main = {}   # keyed by model family
 subs = {}   # keyed by model family
 sub_descriptions = {}  # model family -> set of description strings
 
+# Humanize raw subagent descriptions for non-technical readers.
+# Maps known patterns to short labels; falls back to the raw description.
+import re as _re
+HUMANIZE = [
+    (_re.compile(r'scout|codebase.scout|search.*code|code.*search', _re.I), 'Code search'),
+    (_re.compile(r'npm.*(run\s+)?check|type.?check|validation.?runner|run.*validation', _re.I), 'Type checking'),
+    (_re.compile(r'deep.?investigat', _re.I), 'Investigation'),
+    (_re.compile(r'playwright.*heal|test.*heal', _re.I), 'Test healing'),
+    (_re.compile(r'playwright.*plan|test.*plan', _re.I), 'Test planning'),
+    (_re.compile(r'browser', _re.I), 'Browser testing'),
+    (_re.compile(r'playwright|staging.*test|test.*staging|run.*test|re-?run.*test|test.?runner', _re.I), 'Staging tests'),
+]
+def humanize_desc(raw):
+    for pat, label in HUMANIZE:
+        if pat.search(raw):
+            return label
+    return raw
+
 # First pass: collect subagent descriptions from Agent tool_use calls.
-# Correlate each Agent call to its subagent turns by tracking the agentId
-# that appears in subsequent data.message entries.
-agent_descs_ordered = []  # list of (description, subagent_type) in call order
+agent_descs_ordered = []
 with open('$SESSION_FILE') as f:
     for line in f:
         try:
@@ -220,7 +236,7 @@ with open('$SESSION_FILE') as f:
                 desc = inp.get('description', '')
                 stype = inp.get('subagent_type', '')
                 if desc:
-                    agent_descs_ordered.append(desc)
+                    agent_descs_ordered.append(humanize_desc(desc))
 
 # Second pass: tally tokens
 total_cost = 0.0
@@ -282,17 +298,21 @@ for fam in sorted(main, key=lambda f: main[f]['cost'], reverse=True):
     label = LABELS.get(fam, fam.title())
     print('MAIN:%s|%.2f|%d|%d|%d|%d|%d' % (label, d['cost'], d['turns'], d['in'], d['out'], d['cw'], d['cr']))
 
-# SUB:<model> lines with descriptions.
-# Descriptions are collected from all Agent tool_use calls (not model-specific).
-# Attach all descriptions to the first/primary sub line for readability.
-desc_str = ', '.join(agent_descs_ordered) if agent_descs_ordered else ''
-first_sub = True
+# SUB:<model> lines with descriptions (deduplicated, preserving order).
+seen = set()
+unique_descs = []
+for d in agent_descs_ordered:
+    if d not in seen:
+        seen.add(d)
+        unique_descs.append(d)
+desc_str = ', '.join(unique_descs) if unique_descs else ''
+sub_idx = 0
 for fam in sorted(subs, key=lambda f: subs[f]['cost'], reverse=True):
+    sub_idx += 1
     d = subs[fam]
     label = LABELS.get(fam, fam.title())
-    ds = desc_str if first_sub else ''
-    first_sub = False
-    print('SUB:%s|%.2f|%d|%d|%d|%d|%d|%s' % (label, d['cost'], d['turns'], d['in'], d['out'], d['cw'], d['cr'], ds))
+    ds = desc_str if sub_idx == 1 else ''
+    print('SUB:%d:%s|%.2f|%d|%d|%d|%d|%d|%s' % (sub_idx, label, d['cost'], d['turns'], d['in'], d['out'], d['cw'], d['cr'], ds))
 
 # MODEL: lines for debug log (unchanged)
 by_model = {}
@@ -378,10 +398,14 @@ for fam in sorted(by_model):
   #
   # Output format (multi-model):
   #   - **Performance:** 3 min | $1.87
-  #     - Main: Opus | $1.77 (33 in / 4192 out / 127069 cache-write / 1746938 cache-read)
-  #     - Sub: Haiku | $0.10 (47 in / 24 out / 64556 cache-write / 173472 cache-read) — codebase-scout, validation-runner
+  #     - Main Agent: Opus
+  #       $1.77 (33 in / 4192 out / 127069 cache-write / 1746938 cache-read)
+  #     - Sub Agent 1: Haiku — Type checking
+  #       $0.10 (47 in / 24 out / 64556 cache-write / 173472 cache-read)
   # Output format (single model):
-  #   - **Performance:** 3 min | Opus | $2.77 (30 in / 2813 out / 309833 cache-write / 1520338 cache-read)
+  #   - **Performance:** 3 min | $2.77
+  #     - Main Agent: Opus
+  #       $2.77 (30 in / 2813 out / 309833 cache-write / 1520338 cache-read)
   if [ -f "$sprint_plan" ]; then
     local has_subs=false
     [ -n "$sub_agent_lines" ] && has_subs=true
@@ -398,30 +422,36 @@ for fam in sorted(by_model):
       echo "$main_agent_line" | while IFS='|' read -r _prefix cost turns inp outp cw cr; do
         local model="${_prefix#MAIN:}"
         cost=$(ensure_leading_zero "$cost")
-        echo "    - Main: ${model} | \$${cost} (${inp} in / ${outp} out / ${cw} cache-write / ${cr} cache-read)" >> "$perf_block_file"
+        echo "    - Main Agent: ${model}" >> "$perf_block_file"
+        echo "      \$${cost} (${inp} in / ${outp} out / ${cw} cache-write / ${cr} cache-read)" >> "$perf_block_file"
       done
 
-      # Sub agent line(s) — format: SUB:Label|cost|turns|in|out|cw|cr|descs
+      # Sub agent line(s) — format: SUB:N:Label|cost|turns|in|out|cw|cr|descs
       echo "$sub_agent_lines" | while IFS='|' read -r _prefix cost turns inp outp cw cr descs; do
-        local model="${_prefix#SUB:}"
+        local num_and_model="${_prefix#SUB:}"
+        local sub_num="${num_and_model%%:*}"
+        local model="${num_and_model#*:}"
         cost=$(ensure_leading_zero "$cost")
         local desc_suffix=""
         if [ -n "$descs" ]; then
           desc_suffix=" — ${descs}"
         fi
-        echo "    - Sub: ${model} | \$${cost} (${inp} in / ${outp} out / ${cw} cache-write / ${cr} cache-read)${desc_suffix}" >> "$perf_block_file"
+        echo "    - Sub Agent ${sub_num}: ${model}${desc_suffix}" >> "$perf_block_file"
+        echo "      \$${cost} (${inp} in / ${outp} out / ${cw} cache-write / ${cr} cache-read)" >> "$perf_block_file"
       done
 
       echo "    - Duration calc: (${task_end_ts} - ${TASK_START_TS}) / 60 = ${duration_diff} / 60 = ${duration_decimal} min" >> "$perf_block_file"
       echo "    - Timestamps: start=${TASK_START_TS}, end=${task_end_ts}" >> "$perf_block_file"
     elif [ "$cost_source" = "actual" ]; then
-      # Single model: one-line format
+      # Single model: summary line + agent sub-bullet
       local main_model="${RALPH_MODEL_LABEL}"
       if [ -n "$main_agent_line" ]; then
         main_model=$(echo "$main_agent_line" | cut -d'|' -f1)
         main_model="${main_model#MAIN:}"
       fi
-      echo "  - **Performance:** ${task_duration} min | ${main_model} | \$${cost_est} (${input_tokens} in / ${output_tokens} out / ${cache_creation_tokens} cache-write / ${cache_read_tokens} cache-read)" >> "$perf_block_file"
+      echo "  - **Performance:** ${task_duration} min | \$${cost_est}" >> "$perf_block_file"
+      echo "    - Main Agent: ${main_model}" >> "$perf_block_file"
+      echo "      \$${cost_est} (${input_tokens} in / ${output_tokens} out / ${cache_creation_tokens} cache-write / ${cache_read_tokens} cache-read)" >> "$perf_block_file"
       echo "    - Duration calc: (${task_end_ts} - ${TASK_START_TS}) / 60 = ${duration_diff} / 60 = ${duration_decimal} min" >> "$perf_block_file"
       echo "    - Timestamps: start=${TASK_START_TS}, end=${task_end_ts}" >> "$perf_block_file"
     else
@@ -578,16 +608,16 @@ PYEOF
     
     # Collect unique sub-model families from this sprint's Performance blocks
     local sub_models_str=""
-    if grep -q '^\s*- Sub:' "$sprint_plan" 2>/dev/null; then
-      sub_models_str=$(grep -oE '^\s*- Sub: [A-Za-z]+' "$sprint_plan" 2>/dev/null \
-        | sed 's/.*Sub: //' | sort -u | paste -sd ', ' -)
+    if grep -q '^\s*- Sub Agent' "$sprint_plan" 2>/dev/null; then
+      sub_models_str=$(grep -oE '^\s*- Sub Agent [0-9]+: [A-Za-z]+' "$sprint_plan" 2>/dev/null \
+        | sed 's/.*: //' | sort -u | paste -sd ', ' -)
     fi
 
     # Collect main model from Performance blocks (first match)
     local main_model_str=""
-    main_model_str=$(grep -oE '^\s*- Main: [A-Za-z]+' "$sprint_plan" 2>/dev/null \
-      | head -1 | sed 's/.*Main: //' || true)
-    # Fall back to single-model Performance lines: "3 min | Opus | $2.77"
+    main_model_str=$(grep -oE '^\s*- Main Agent: [A-Za-z]+' "$sprint_plan" 2>/dev/null \
+      | head -1 | sed 's/.*: //' || true)
+    # Fall back to single-model Performance lines (legacy format)
     if [ -z "$main_model_str" ]; then
       main_model_str=$(grep '\*\*Performance:\*\*' "$sprint_plan" 2>/dev/null \
         | grep -oE '\| [A-Z][a-z]+ \|' | head -1 | tr -d '| ' || true)
@@ -811,14 +841,16 @@ if [ "$DISPLAY_TOKENS" = "exact" ]; then
     ma_model=$(echo "$MAIN_AGENT_LINE" | cut -d'|' -f1)
     ma_model="${ma_model#MAIN:}"
     ma_cost=$(echo "$MAIN_AGENT_LINE" | cut -d'|' -f2)
-    echo -e "  Main:     ${ma_model} | \$${ma_cost}"
+    echo -e "  Main:     ${ma_model} (\$${ma_cost})"
   fi
   if [ -n "${SUB_AGENT_LINES:-}" ]; then
     echo "$SUB_AGENT_LINES" | while IFS='|' read -r _prefix cost turns inp outp cw cr descs; do
-      local model="${_prefix#SUB:}"
+      local num_and_model="${_prefix#SUB:}"
+      local sub_num="${num_and_model%%:*}"
+      local model="${num_and_model#*:}"
       local desc_part=""
       [ -n "$descs" ] && desc_part=" — ${descs}"
-      echo -e "  Sub:      ${model} | \$${cost}${desc_part}"
+      echo -e "  Sub ${sub_num}:    ${model} (\$${cost})${desc_part}"
     done
   fi
 else
