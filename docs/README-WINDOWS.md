@@ -22,11 +22,7 @@ You interact with Ralph through a terminal (a window where you type commands). R
 
 ## What you need before starting
 
-### 1. A Windows PC
-
-This guide is for Windows. If you're on Mac, see [README-MAC.md](README-MAC.md).
-
-### 2. Git for Windows
+### 1. Git for Windows
 
 Git for Windows includes **Git Bash**, the terminal you'll use to run Ralph.
 
@@ -36,7 +32,7 @@ Git for Windows includes **Git Bash**, the terminal you'll use to run Ralph.
 
 After installing, Git Bash will appear in your Start menu. Use Git Bash (not PowerShell or Command Prompt) for all Ralph commands.
 
-### 3. Node.js
+### 2. Node.js
 
 Claude Code requires Node.js.
 
@@ -44,7 +40,7 @@ Claude Code requires Node.js.
 
 **To install:** Download the LTS version from [nodejs.org](https://nodejs.org) and run the installer.
 
-### 4. Claude Code
+### 3. Claude Code
 
 This is the AI tool that powers Ralph. Once Node.js is installed, open Git Bash and run:
 
@@ -55,32 +51,27 @@ npm install -g @anthropic-ai/claude-code
 **To verify it worked:** Run `claude --version`. You should see a version number.
 
 **To get it at Zillow:**
-1. Submit a [ServiceNow request](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9) to get access — this may take a few days
+1. Submit a [ServiceNow request](https://zillow.service-now.com/esc?id=sc_cat_item&sys_id=5ef70cfb93bfea149922f60b6aba10a9) to get access — should get access same day
 2. Once approved, open Git Bash and run:
    ```bash
    irm https://claude.ai/install.ps1 | iex
    ```
 3. When prompted to log in, use your Zillow email and password
 
-### 5. A project to use it on
+### 4. A project to use it on
 
 Ralph works on existing codebases that have:
-- Source code in a git repository (ask your team's engineer — they'll know)
-- A dev environment where code auto-deploys when pushed (most Zillow apps have this)
+- Source code in a git repository (ask your team if you're unsure)
+- A dev environment where code auto-deploys when pushed — if your app isn't deployed yet, follow [ONBOARDING.md](../ONBOARDING.md) first
 
-If you're not sure whether your project qualifies, ask Zach (zpartyka@zillow.com) — happy to help figure it out.
+### 5. The Ralph starter kit
 
-### 6. The Ralph starter kit (this folder)
+**Option A — Download:** Go to [gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit](https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit), click the download icon, and extract the zip to `~/Documents/ralph-starter-kit`.
 
-If you're reading this, you probably already have it. If not, open Git Bash and run:
-
+**Option B — Clone:**
 ```bash
 git clone https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit.git ~/Documents/ralph-starter-kit
 ```
-
-This clones the kit to `C:\Users\<your-name>\Documents\ralph-starter-kit` (Git Bash uses `~` as a shorthand for your Windows user folder).
-
-**If `git clone` doesn't work**, you may need to set up GitLab access first. Ask your team lead or check the [Zillow GitLab docs](https://gitlab.zgtools.net).
 
 ---
 
@@ -242,7 +233,7 @@ Tell Ralph what's wrong — describe what you expected vs. what you see. It can 
 Your code is in git, so nothing is permanent. Ask the engineer on your team to help revert if needed, or run `git revert` yourself if you're comfortable with it.
 
 **"`claude` command not found":**
-Claude Code isn't installed. See [What you need](#4-claude-code) above.
+Claude Code isn't installed. See [What you need](#3-claude-code) above.
 
 **"`/ralph` not found":**
 The Ralph skills aren't installed. Run the setup script again:
