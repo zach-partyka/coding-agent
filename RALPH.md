@@ -1,6 +1,6 @@
 # Ralph Build Instructions
 
-Project-specific configuration (deploy target URL, build commands, git remote) lives in `ralph.config.sh`.
+Project-specific configuration (deploy target URL, build commands, git remote) lives in `ralph-config.md`.
 
 ---
 

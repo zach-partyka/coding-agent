@@ -132,8 +132,8 @@ else
 fi
 
 # Check if already set up
-if [ -f "$PROJECT_DIR/ralph.config.sh" ]; then
-  echo "⚠️  ralph.config.sh already exists in this directory."
+if [ -f "$PROJECT_DIR/ralph-config.md" ]; then
+  echo "⚠️  ralph-config.md already exists in this directory."
   read -p "Overwrite? (y/n): " OVERWRITE
   if [ "$OVERWRITE" != "y" ]; then
     echo "Setup cancelled."
@@ -275,47 +275,25 @@ echo ""
 echo "=== Generating Files ==="
 echo ""
 
-# Create ralph.config.sh
-echo "Creating ralph.config.sh..."
-cat > "$PROJECT_DIR/ralph.config.sh" <<EOF
-#!/bin/bash
-# Ralph Project Configuration
+# Create ralph-config.md
+echo "Creating ralph-config.md..."
+cat > "$PROJECT_DIR/ralph-config.md" <<EOF
+# Ralph config
 
-# =============================================================================
-# REQUIRED CONFIGURATION
-# =============================================================================
+Ralph scripts and agents read the block below for deploy URL, validation commands, and git. See RALPH_CONFIG.md in the Ralph kit.
 
-# Git Configuration
-export RALPH_GIT_REMOTE="$GIT_REMOTE"
-export RALPH_GIT_MAIN_BRANCH="$GIT_MAIN_BRANCH"
-
-# Deployment Configuration
-export RALPH_DEPLOY_URL="$STAGING_URL"
-export RALPH_DEPLOY_WAIT_SECONDS=$DEPLOY_WAIT
-
-# Validation Commands
-export RALPH_VALIDATE_LOCAL="$VALIDATE_LOCAL"
-export RALPH_VALIDATE_DEPLOY="$VALIDATE_STAGING"
-
-# Health check endpoint
-export RALPH_HEALTH_CHECK_PATH="$HEALTH_CHECK"
-
-# =============================================================================
-# OPTIONAL CONFIGURATION
-# =============================================================================
-
-# Set deploy URL as environment variable for integration tests
-export RALPH_TEST_ENV_VARS="STAGING_URL=\$RALPH_DEPLOY_URL"
-
-# Task timeout in minutes (default: 15)
-# export RALPH_TASK_TIMEOUT_MINUTES=15
-
-# Auto-archive completed sprints (default: true)
-# export RALPH_AUTO_ARCHIVE=true
+\`\`\`ralph-config
+RALPH_GIT_REMOTE="$GIT_REMOTE"
+RALPH_GIT_MAIN_BRANCH="$GIT_MAIN_BRANCH"
+RALPH_DEPLOY_URL="$STAGING_URL"
+RALPH_DEPLOY_WAIT_SECONDS=$DEPLOY_WAIT
+RALPH_VALIDATE_LOCAL="$VALIDATE_LOCAL"
+RALPH_VALIDATE_DEPLOY="$VALIDATE_STAGING"
+RALPH_HEALTH_CHECK_PATH="$HEALTH_CHECK"
+RALPH_TEST_ENV_VARS="STAGING_URL=\$RALPH_DEPLOY_URL"
+\`\`\`
 EOF
-
-chmod +x "$PROJECT_DIR/ralph.config.sh"
-echo "✓ Created ralph.config.sh"
+echo "✓ Created ralph-config.md"
 
 # Copy ralph.sh launcher
 echo "Copying ralph.sh..."
@@ -432,7 +410,7 @@ echo "=== Setup Complete! ==="
 echo ""
 echo "Files created:"
 echo "  ✓ ralph.sh (launcher)"
-echo "  ✓ ralph.config.sh (configuration)"
+echo "  ✓ ralph-config.md (configuration)"
 echo "  ✓ RALPH.md (build instructions)"
 echo "  ✓ roadmap.md (product roadmap — Now/Next/Later)"
 echo "  ✓ sprint_plan.md (sprint tracker)"

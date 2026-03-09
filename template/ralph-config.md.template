@@ -1,0 +1,13 @@
+# Ralph config
+
+Ralph scripts and agents read the block below. See RALPH_CONFIG.md in the Ralph kit.
+
+```ralph-config
+RALPH_GIT_REMOTE="https://gitlab.zgtools.net/your-team/your-project.git"
+RALPH_GIT_MAIN_BRANCH="main"
+RALPH_DEPLOY_URL="https://your-app-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net"
+RALPH_DEPLOY_WAIT_SECONDS=300
+RALPH_VALIDATE_LOCAL="npm run check"
+RALPH_VALIDATE_DEPLOY="npm test"
+RALPH_HEALTH_CHECK_PATH="/health"
+```

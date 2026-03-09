@@ -347,21 +347,28 @@ log "Starting Ralph Continuous (terminal type: ${TERMINAL_TYPE})"
 log "Project: ${PROJECT_DIR}"
 log "Fix Plan: ${FIX_PLAN}"
 
-# Load project configuration if it exists
-if [ -f "$PROJECT_DIR/ralph.config.sh" ]; then
-  log "Loading project configuration from ralph.config.sh"
-  source "$PROJECT_DIR/ralph.config.sh"
+# Load project configuration from ralph-config.md only
+load_ralph_config() {
+  [ -f "$PROJECT_DIR/ralph-config.md" ] || return 1
+  local tmp
+  tmp=$(mktemp)
+  sed -n '/^```ralph-config$/,/^```$/p' "$PROJECT_DIR/ralph-config.md" | sed '1d;$d' > "$tmp" 2>/dev/null || true
+  if [ -s "$tmp" ]; then
+    source "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
 
-  # Export all RALPH_* variables so spawned tabs inherit them
+if load_ralph_config; then
   export RALPH_GIT_REMOTE RALPH_DEPLOY_URL RALPH_GIT_MAIN_BRANCH
   export RALPH_DEPLOY_WAIT_SECONDS RALPH_VALIDATE_LOCAL RALPH_VALIDATE_DEPLOY
   export RALPH_HEALTH_CHECK_PATH RALPH_TASK_TIMEOUT_MINUTES RALPH_AUTO_ARCHIVE
   export RALPH_TEST_ENV_VARS
-
   echo -e "${GREEN}✓ Configuration loaded${NC}"
-  log "Configuration loaded successfully"
-else
-  log "No ralph.config.sh found - using default configuration"
+  log "Configuration loaded"
 fi
 
 if [ "$FORCE_INLINE" = true ]; then

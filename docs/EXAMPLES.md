@@ -78,7 +78,7 @@ You can set up additional hotkeys for other Ralph commands:
 
 2. Ensure you have:
    - ✅ `sprint_plan.md` with tasks
-   - ✅ `ralph.config.sh` configured
+   - ✅ `ralph-config.md` with a `ralph-config` block
    - ✅ Ralph skills installed
 
 3. Press `Shift+Cmd+R`
@@ -142,17 +142,10 @@ Press Enter to use default, or type custom command:
 
 **2. Verify generated config**
 ```bash
-cat ralph.config.sh
+cat ralph-config.md
 ```
 
-Should look like:
-```bash
-export RALPH_GIT_REMOTE="https://gitlab.zgtools.net/your-team/your-app.git"
-export RALPH_GIT_MAIN_BRANCH="main"
-export RALPH_DEPLOY_URL="https://your-app-dev.your-domain.com"
-export RALPH_VALIDATE_LOCAL="python -m ruff check src/ && python -m mypy src/ && python -m pytest tests/unit/"
-export RALPH_VALIDATE_DEPLOY="python -m pytest tests/integration/ -v"
-```
+Should include a `ralph-config` fenced block with RALPH_GIT_REMOTE, RALPH_DEPLOY_URL, RALPH_VALIDATE_LOCAL, RALPH_VALIDATE_DEPLOY, etc.
 
 **3. Review installed patterns**
 
@@ -282,16 +275,10 @@ Press Enter to use default, or type custom command:
 
 **2. Verify generated config**
 ```bash
-cat ralph.config.sh
+cat ralph-config.md
 ```
 
-Should look like:
-```bash
-export RALPH_GIT_REMOTE="https://gitlab.zgtools.net/your-team/your-app.git"
-export RALPH_DEPLOY_URL="https://your-app-dev.your-domain.com"
-export RALPH_VALIDATE_LOCAL="npm run check"
-export RALPH_VALIDATE_DEPLOY="STAGING_URL=\$RALPH_DEPLOY_URL npm test"
-```
+Should contain a `ralph-config` fenced block with RALPH_GIT_REMOTE, RALPH_DEPLOY_URL, RALPH_VALIDATE_LOCAL, RALPH_VALIDATE_DEPLOY, etc.
 
 **3. Review installed patterns**
 
@@ -527,23 +514,13 @@ export TERM_PROGRAM="iTerm.app"
 
 **Issue: Config not loaded**
 
-Verify file exists:
+Verify file exists and has a `ralph-config` block:
 ```bash
-ls -la ralph.config.sh
-# Should be executable: -rwxr-xr-x
+ls -la ralph-config.md
+grep -A1 '^```ralph-config' ralph-config.md
 ```
 
-Make executable:
-```bash
-chmod +x ralph.config.sh
-```
-
-Test config loads:
-```bash
-source ralph.config.sh
-echo $RALPH_DEPLOY_URL
-# Should print your deploy target URL
-```
+Scripts (ralph.sh, ralph-continuous.sh) load the block when you run them. No need to source manually.
 
 **Issue: Skills use wrong values**
 

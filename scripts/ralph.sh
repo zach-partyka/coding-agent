@@ -18,33 +18,34 @@ else
 fi
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Load project configuration
-if [ -f "./ralph.config.sh" ]; then
-  source ./ralph.config.sh
-else
-  echo "ERROR: ralph.config.sh not found"
-  echo ""
-  echo "Ralph needs a configuration file to work with your project."
-  echo ""
-  echo "To set up Ralph:"
-  echo "  1. Copy the template: cp /path/to/ralph-starter-kit/template/ralph.config.sh.template ralph.config.sh"
-  echo "  2. Edit ralph.config.sh with your project details"
-  echo "  3. Run ./ralph.sh again"
-  echo ""
-  echo "Or use the setup script: /path/to/ralph-starter-kit/scripts/setup.sh"
+# Load project configuration from ralph-config.md only
+load_ralph_config() {
+  [ -f "./ralph-config.md" ] || return 1
+  local tmp
+  tmp=$(mktemp)
+  sed -n '/^```ralph-config$/,/^```$/p' ./ralph-config.md | sed '1d;$d' > "$tmp" 2>/dev/null || true
+  if [ -s "$tmp" ]; then
+    source "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+if ! load_ralph_config; then
+  echo "ERROR: ralph-config.md missing or no \`\`\`ralph-config\`\`\` block."
+  echo "Create it. See RALPH_CONFIG.md in the Ralph kit docs."
   exit 1
 fi
 
-# Validate required configuration
-if [ -z "$RALPH_GIT_REMOTE" ]; then
-  echo "ERROR: RALPH_GIT_REMOTE not set in ralph.config.sh"
-  echo "Set the git remote URL (e.g., 'https://gitlab.zgtools.net/team/project.git')"
+if [ -z "${RALPH_GIT_REMOTE:-}" ]; then
+  echo "ERROR: RALPH_GIT_REMOTE not set in ralph-config.md"
   exit 1
 fi
 
-if [ -z "$RALPH_DEPLOY_URL" ]; then
-  echo "ERROR: RALPH_DEPLOY_URL not set in ralph.config.sh"
-  echo "Set the deploy target URL (e.g., 'https://app-dev.domain.com')"
+if [ -z "${RALPH_DEPLOY_URL:-}" ]; then
+  echo "ERROR: RALPH_DEPLOY_URL not set in ralph-config.md"
   exit 1
 fi
 
