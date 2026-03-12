@@ -1,6 +1,7 @@
 ---
 name: ralph
 description: Building mode for Ralph - implements ONE thing from sprint_plan.md and stops. Creates branch, implements per specs/stdlib, commits/pushes to GitLab, merges to main, waits for deploy, runs Playwright against the deploy target. Updates sprint_plan.md and RALPH.md. Stops after one thing for human review.
+disable-model-invocation: true
 ---
 
 # Ralph Building Mode

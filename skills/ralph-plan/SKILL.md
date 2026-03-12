@@ -1,6 +1,7 @@
 ---
 name: ralph-plan
 description: Interactive sprint planning for Ralph. Pulls up backlog items, asks clarifying questions one at a time, and builds a sprint_plan.md ready for /ralph-continuous.
+disable-model-invocation: true
 ---
 
 # Ralph Plan - Interactive Sprint Planning

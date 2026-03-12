@@ -78,7 +78,7 @@ The script will ask you a few questions about your project — staging URL, what
 | `ralph.sh` | Runs one task from sprint_plan.md and stops — copied to your project root by setup.sh |
 | `ralph-continuous.sh` | Runs all tasks from sprint_plan.md, opening a new terminal tab per task |
 | `ralph-task-wrapper.sh` | Runs inside each tab — handles the UI, cost tracking, and post-processing |
-| `install-ralph-skills.sh` | Reinstalls Ralph skills into `~/.claude/skills/` if needed |
+| `install-ralph.sh` | Reinstalls Ralph skills as symlinks into `~/.claude/skills/` |
 
 **What setup creates:**
 

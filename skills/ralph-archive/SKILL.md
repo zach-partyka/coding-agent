@@ -1,6 +1,7 @@
 ---
 name: ralph-archive
 description: Archives completed Ralph sprint with performance metrics. Generates sprint_summary.md, copies sprint_plan.md to archive, creates fresh sprint_plan.md, updates sprint_history.md and roadmap.md (with follow-ups and completions). Use when all tasks in sprint_plan.md are complete and ready to start new sprint.
+disable-model-invocation: true
 ---
 
 # Ralph Archive Mode

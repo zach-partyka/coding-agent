@@ -1,6 +1,7 @@
 ---
 name: ralph-continuous
 description: Continuous building mode for Ralph with full interactive visibility - each task opens in a NEW terminal tab so you can watch Claude work with diffs and reasoning. Implements ALL items from sprint_plan.md until complete or blocked.
+disable-model-invocation: true
 ---
 
 # Ralph Continuous Mode
