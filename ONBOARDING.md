@@ -1,19 +1,19 @@
 # Getting Your App Ready for Ralph
 
-Ralph needs a running app with a test environment and CI/CD. This guide walks through the steps; **Marketing Copilot** is the reference example — use it for patterns and file examples, and adjust for your app and team.
+Ralph needs a running app with a test environment and CI/CD. This guide walks through the steps — adjust each one for your stack, team, and infrastructure.
 
-If your app is already deployed with a test URL and a GitLab pipeline, skip to [Using Ralph →](README.md).
+If your app is already deployed with a test URL and an auto-deploying CI/CD pipeline, skip to [Using Ralph →](README.md).
 
 ---
 
 ## Progress tracker
 
 - [ ] **Step 1** — App built and running locally
-- [ ] **Step 2** — Data / backend (Databricks, Postgres/Neon, etc.)
-- [ ] **Step 3** — Containerized + CI/CD (you + Delivery/CI)
-- [ ] **Step 4** — Deployed to Kubernetes
-- [ ] **Step 5** — ZGAI connected *(skip if no AI)*
-- [ ] **Step 6** — Secrets in Zodiac + Keeper
+- [ ] **Step 2** — Data / backend (database, external services, etc.)
+- [ ] **Step 3** — Containerized + CI/CD pipeline
+- [ ] **Step 4** — Deployed to a hosting environment
+- [ ] **Step 5** — External API connected *(skip if no external AI/API)*
+- [ ] **Step 6** — Secrets managed securely
 - [ ] **Step 7** — Accounts working, URL shared
 - [ ] **Step 8** — Playwright tests in CI
 
@@ -23,19 +23,19 @@ If your app is already deployed with a test URL and a GitLab pipeline, skip to [
 
 **Who:** You
 
-Get your app running locally and put it in a GitLab repo under your team's group (e.g. `gitlab.zgtools.net/your-team/your-app`). **Reference:** Marketing Copilot is at `tpm_cdp_team/marketing_copilot`.
+Get your app running locally and put it in a git repo (GitHub, GitLab, Bitbucket — anywhere that supports HTTPS remotes).
 
 - Clone, install, run:
   ```bash
-  git clone https://gitlab.zgtools.net/your-team/your-app.git
+  git clone https://your-git-host.com/your-org/your-app.git
   cd your-app
   cp .env.example .env   # fill in local values
-  npm install
+  npm install            # or pip install / go mod download
   npm run dev
   ```
 - Document every variable in `.env.example` — name, purpose, where to get the value.
 
-**Done when:** A teammate can clone, fill `.env`, and see the app at `localhost:3000` within ~15 minutes.
+**Done when:** A teammate can clone, fill `.env`, and see the app at `localhost:3000` (or equivalent) within ~15 minutes.
 
 ---
 
@@ -45,80 +45,86 @@ Get your app running locally and put it in a GitLab repo under your team's group
 
 Set up whatever your app uses for data:
 
-- **Databricks:** Create the tables you need; add any scheduled jobs (tag `Service: your-app`, `Team: your-team`). Put connection details in `.env.example`.
-- **Postgres / Neon:** Provision a database (e.g. Neon Serverless), create schema, add the connection string to Zodiac secrets and `.env.example` (e.g. `SESSION_DATABASE_URL`, `DATABASE_URL`).
+- **Relational DB (Postgres, MySQL, etc.):** Provision a database, run migrations, add the connection string to `.env.example`. Cloud options: Neon (serverless Postgres), PlanetScale, Railway, or a managed instance on your cloud provider.
+- **Other data stores:** Add connection details to `.env.example` with notes on where to get credentials.
 
-**Reference:** Marketing Copilot uses Neon Postgres for session store and (optionally) Databricks for other data; see its schema and env pattern if helpful.
-
-**Done when:** The app reads/writes data and any scheduled jobs run. Skip if your app has no DB or external data yet.
+**Done when:** The app reads/writes data successfully. Skip if your app has no DB or external data yet.
 
 ---
 
 ## Step 3 — Containerize and set up CI/CD
 
-**Who:** You + Delivery/CI
+**Who:** You (+ your platform/infra team if needed)
 
-Get GitLab building and deploying on push to `main`.
+Get your CI/CD pipeline building and deploying on push to `main`.
 
-1. **Request from Delivery/CI:** Artifactory Docker repos for your team, GitLab CI variables (`ARTIFACTORY_*`), and deploy permissions to the target cluster.
-2. **Add a `Dockerfile`** — Node, Python, or Go; expose the app port and set the start command.
-3. **Add `.gitlab-ci.yml`** — Use the standard Zillow CI template; add build + deploy stages. Delivery/CI can provide an example for your cluster.
+1. **Add a `Dockerfile`** — expose the app port and set the start command.
+2. **Add a CI/CD config** — GitHub Actions, GitLab CI, CircleCI, etc. Add build and deploy stages. Your platform team can usually provide a template for your target environment.
 
-**Reference:** Marketing Copilot’s [.gitlab-ci.yml](https://gitlab.zgtools.net/tpm_cdp_team/marketing_copilot/-/blob/main/.gitlab-ci.yml) is a minimal build-and-deploy example.
+Example GitHub Actions deploy step:
+```yaml
+- name: Deploy
+  run: |
+    docker build -t your-registry/your-app:${{ github.sha }} .
+    docker push your-registry/your-app:${{ github.sha }}
+    # trigger deploy to your hosting platform
+```
 
-**Done when:** Push to `main` → pipeline builds image, pushes to Artifactory, and triggers deploy. Green pipeline in GitLab.
+**Done when:** Push to `main` → pipeline builds image, pushes to your registry, triggers deploy. Green pipeline.
 
 ---
 
-## Step 4 — Deploy to Kubernetes (consumer nonprod)
+## Step 4 — Deploy to a hosting environment
 
-**Who:** You + Delivery/CI
+**Who:** You (+ platform team if needed)
 
-Wire the pipeline to deploy into the **consumer nonprod** cluster. Your app gets a URL like:
+Deploy your app to a persistent test/dev URL. Options: Render, Railway, Fly.io, AWS ECS/EKS, GCP Cloud Run, Kubernetes — whatever your team uses.
 
-```
-https://your-app-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net
-```
-
-Add a **`/health`** endpoint — Ralph uses it to confirm deploys:
+Add a **`/health`** endpoint — Ralph uses it to confirm deploys succeeded:
 
 ```typescript
 app.get('/health', (req, res) => res.json({ status: 'healthy' }));
 ```
 
-**Reference:** Marketing Copilot dev URL: `https://marketing-copilot-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net`. Its server exposes `/health`.
+Your dev URL pattern will look something like:
+```
+https://your-app-dev.your-domain.com
+```
 
-**Done when:** Push to `main`, wait ~5 min, open the app URL in a browser and see it running.
-
----
-
-## Step 5 — Connect to ZGAI *(skip if no AI)*
-
-**Who:** You + platform team
-
-If your app uses the Zillow LLM API (ZGAI):
-
-1. **Request:** Get your service added to the ZGAI `SERVICE_ALLOWLIST` (ask platform or check ZGAI onboarding).
-2. **Zodiac:** Kong – API Key request; target `zgai-llm-api`, sub-environment `stage`. Terraform provisions the key.
-
-**Reference:** Marketing Copilot uses ZGAI for chat and brief coaching; it reads the key from env (e.g. `ZGAI_API_KEY`).
-
-**Done when:** ZGAI calls from your app return 200, not 401/403.
+**Done when:** Push to `main`, wait a few minutes, open the app URL in a browser and see it running.
 
 ---
 
-## Step 6 — Secrets in Zodiac + Keeper
+## Step 5 — Connect external APIs *(skip if not applicable)*
 
-**Who:** You  
-Don’t hardcode keys. Store them in Keeper and expose them to the app via Zodiac.
+**Who:** You (+ API provider onboarding if needed)
 
-1. Put the key in **Keeper** (e.g. team folder → your-app → `ZGAI_API_KEY`).
-2. In **Zodiac** → your service → Secrets: add a nonprod secret with the variable name your app expects. The app reads it from `process.env.VAR_NAME`.
-3. In **`.env.example`** list the variable name and where to get the value (e.g. “from Keeper: team/your-app”).
+If your app calls an external AI or other API:
 
-**Reference:** Marketing Copilot stores ZGAI_API_KEY, SESSION_DATABASE_URL, SESSION_SECRET, etc. in Zodiac; see its `.env.example` for the list.
+1. Get an API key from the provider (OpenAI, Anthropic, etc.)
+2. Add the key name to `.env.example` with a note on where to get it
+3. Store it in your secret manager (Step 6) — don't hardcode it
 
-**Done when:** Deployed app gets secrets from the environment; nothing sensitive is in git.
+**Done when:** API calls from your deployed app return 200.
+
+---
+
+## Step 6 — Secrets managed securely
+
+**Who:** You
+
+Don't hardcode credentials or commit them to git. Common approaches:
+
+- **Environment variables injected at deploy time** — set in your hosting platform's dashboard or CI/CD secrets
+- **Secret manager** — AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager, Doppler, etc.
+- **`.env` files** — local development only; always gitignored
+
+The pattern:
+1. Add the variable name (not value) to `.env.example` with a note on where to get it
+2. Set the actual value in your secret manager or hosting platform
+3. App reads it from `process.env.VAR_NAME` (or equivalent)
+
+**Done when:** Deployed app gets secrets from the environment. Nothing sensitive is in git.
 
 ---
 
@@ -128,9 +134,9 @@ Don’t hardcode keys. Store them in Keeper and expose them to the app via Zodia
 
 1. Verify the main flow: sign up, sign in, create/save something.
 2. Confirm data is stored correctly.
-3. Share the app URL and how to sign in (e.g. “Sign in with your Zillow credentials”).
+3. Share the app URL and how to sign in with your team.
 
-**Done when:** Teammates can open the URL, create an account, and use the app without your help.
+**Done when:** A teammate can open the URL, create an account, and use the app without your help.
 
 ---
 
@@ -138,14 +144,22 @@ Don’t hardcode keys. Store them in Keeper and expose them to the app via Zodia
 
 **Who:** You
 
-Ralph uses these to verify changes didn’t break the app.
+Ralph uses these to verify changes didn't break the app.
 
-- **Install:** `npm install --save-dev @playwright/test` and `npx playwright install chromium`.
-- **Config:** Set `baseURL` from env (e.g. `process.env.STAGING_URL || 'http://localhost:3000'`) so the same tests run locally and against deploy.
-- **Tests:** Smoke tests for auth and core flows; use `data-testid` or roles for stable selectors.
-- **CI:** Add a test stage that runs after deploy with `STAGING_URL=$DEV_URL npm test`.
-
-**Reference:** Marketing Copilot’s `playwright.config.ts` and `tests/` show baseURL, auth setup, and test patterns. See [marketing_copilot repo](https://gitlab.zgtools.net/tpm_cdp_team/marketing_copilot) for examples.
+- **Install:** `npm install --save-dev @playwright/test` and `npx playwright install chromium`
+- **Config:** Set `baseURL` from env so the same tests run locally and against your deploy:
+  ```typescript
+  // playwright.config.ts
+  use: {
+    baseURL: process.env.STAGING_URL || 'http://localhost:3000',
+  }
+  ```
+- **Tests:** Smoke tests for auth and core flows; use `data-testid` or roles for stable selectors
+- **CI:** Add a test stage that runs after deploy:
+  ```yaml
+  - name: Test
+    run: STAGING_URL=${{ vars.DEV_URL }} npm test
+  ```
 
 **Done when:** Push to `main` → build → deploy → tests run against the live URL; pipeline is green.
 
@@ -156,9 +170,9 @@ Ralph uses these to verify changes didn’t break the app.
 You should have:
 
 - App at a shared URL
-- GitLab pipeline that deploys on push to `main`
+- CI/CD pipeline that deploys on push to `main`
 - `/health` returning 200
 - Playwright tests running against the live URL
-- Secrets in Zodiac, not in code
+- Secrets in your secret manager, not in code
 
 Next: [Set up Ralph →](README.md)

@@ -19,4 +19,8 @@ Ralph is an AI agent that builds software for you. You describe what you want, R
 
 Config: one file, `ralph-config.md`. See **docs/RALPH_CONFIG.md**.
 
-Questions? Open an issue at [gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit](https://gitlab.zgtools.net/tpm_cdp_team/ralph-starter-kit/-/issues). Internal Zillow use.
+Questions? Open an issue at [github.com/zach-partyka/coding-agent](https://github.com/zach-partyka/coding-agent/issues).
+
+---
+
+**Two-repo note:** This is the universal core — no org-specific tooling, registries, or infrastructure. If your org has specific CI/CD, secret management, or deployment patterns, fork this repo and add an org layer on top (your own `ONBOARDING.md`, platform-specific README guides, stack patterns). The universal core gets periodic updates; pull them in as needed.
