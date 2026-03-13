@@ -371,6 +371,42 @@ if load_ralph_config; then
   log "Configuration loaded"
 fi
 
+# ── Update check ────────────────────────────────────────────────────────────
+check_for_updates() {
+  command -v gum &>/dev/null || return  # skip silently if gum not installed
+  local kit_dir
+  kit_dir="$(cd "$(dirname "$0")/.." && pwd)"
+  git -C "$kit_dir" fetch origin --quiet 2>/dev/null || return
+  local behind
+  behind=$(git -C "$kit_dir" rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+  [ "$behind" -eq 0 ] && return
+
+  echo ""
+  gum style \
+    --border double \
+    --border-foreground 212 \
+    --foreground 212 \
+    --padding "1 3" \
+    "⚡ Ralph update available — $behind new change$([ "$behind" -gt 1 ] && echo 's')"
+  echo ""
+
+  if gum confirm "View what's new?"; then
+    gum pager < "$kit_dir/CHANGELOG.md"
+    echo ""
+  fi
+
+  if gum confirm "Update Ralph now? (recommended before sprinting)"; then
+    gum spin --spinner dot --title "Pulling updates..." -- \
+      git -C "$kit_dir" pull --quiet
+    echo ""
+    gum style --foreground 82 "✓ Ralph updated. Starting sprint..."
+    echo ""
+  fi
+}
+
+check_for_updates
+# ── End update check ─────────────────────────────────────────────────────────
+
 if [ "$FORCE_INLINE" = true ]; then
   echo -e "${YELLOW}Note: Running in inline mode (--inline flag).${NC}"
   echo -e "${YELLOW}Full interactive UI in this terminal. Fresh context per task.${NC}"

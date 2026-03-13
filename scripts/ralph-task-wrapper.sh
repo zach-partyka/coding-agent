@@ -2,17 +2,16 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Ralph task wrapper - provides clean terminal UI + background post-processing
+# Ralph task wrapper - provides clean terminal UI + inline post-processing
 # Called by ralph-continuous.sh for each task
 #
-# Architecture (Approach 2 - background watcher):
-#   1. Wrapper starts background watcher that monitors for claude-done marker
+# Architecture (sequential):
+#   1. Write session-context.txt
 #   2. Claude runs INTERACTIVELY (user can redirect/interrupt)
-#   3. When Claude finishes task, it touches claude-done marker
-#   4. Background watcher waits for Claude process to fully exit (PID), then runs
-#      post-processing (SHELL_WILL_UPDATE replacement, sprint totals), then touches task-done
-#   5. Orchestrator sees task-done and spawns next tab
-#   6. If user exits Claude manually, wrapper also triggers background watcher
+#   3. wait $CLAUDE_PID blocks until Claude fully exits
+#   4. If claude-done not touched, touch it (safety net)
+#   5. run_post_processing inline (SHELL_WILL_UPDATE replacement, sprint totals)
+#   6. touch task-done — orchestrator sees this and spawns next tab
 
 if [ $# -lt 4 ]; then
   echo "ERROR: Not enough arguments (need at least 4, got $#)" >&2
@@ -40,7 +39,7 @@ echo "════════════════════════�
 echo "Wrapper started: $(date '+%Y-%m-%d %H:%M:%S')" >&3
 echo "Task: #$TASK_NUM" >&3
 echo "PID: $$" >&3
-echo "Architecture: Approach 2 (background watcher)" >&3
+echo "Architecture: sequential (inline post-processing)" >&3
 echo "═══════════════════════════════════════════════════════════" >&3
 
 # Clear screen AND scrollback buffer immediately (hides command echo)
@@ -391,61 +390,6 @@ PYEOF
   echo "Post-processing complete at $(date '+%Y-%m-%d %H:%M:%S')" >> "$debug_log"
 }
 
-# ── Launch background watcher ──
-(
-  # Background subshell: disable set -e so individual command failures don't kill us.
-  # The EXIT trap is our safety net - task-done MUST be created no matter what.
-  set +e
-
-  # Safety net: ALWAYS touch task-done on exit so the loop never hangs.
-  # This fires on normal exit AND on error. The post-processing is best-effort;
-  # the loop advancing is non-negotiable.
-  trap '
-    if [ ! -f "$TASK_DONE_MARKER" ]; then
-      touch "$TASK_DONE_MARKER" 2>/dev/null
-      echo "BG watcher: task-done created via safety trap at $(date "+%Y-%m-%d %H:%M:%S")" >> "$DEBUG_LOG" 2>/dev/null
-    fi
-  ' EXIT
-
-  # Wait for Claude to signal task completion
-  while [ ! -f "$CLAUDE_DONE_MARKER" ]; do
-    sleep 2
-  done
-
-  echo "BG watcher: claude-done detected at $(date '+%Y-%m-%d %H:%M:%S')" >> "$DEBUG_LOG"
-
-  # Wait for Claude process to fully exit, up to 15s (ensures final statusline write)
-  # Timeout handles the case where user keeps the tab open — proceeds with near-final stats
-  if [ -f "$MARKER_DIR/claude-pid" ]; then
-    cpid=$(cat "$MARKER_DIR/claude-pid" 2>/dev/null || echo "")
-    if [ -n "$cpid" ]; then
-      timeout_count=0
-      while kill -0 "$cpid" 2>/dev/null && [ "$timeout_count" -lt 15 ]; do
-        sleep 1
-        timeout_count=$((timeout_count + 1))
-      done
-      if kill -0 "$cpid" 2>/dev/null; then
-        echo "BG watcher: Claude process still alive after 15s, proceeding with near-final stats" >> "$DEBUG_LOG"
-      else
-        echo "BG watcher: Claude process (PID $cpid) exited after ${timeout_count}s" >> "$DEBUG_LOG"
-      fi
-    fi
-  fi
-  sleep 1  # let final statusline write settle to disk
-
-  # Run post-processing (SHELL_WILL_UPDATE replacement + sprint totals)
-  # If this fails, the EXIT trap still creates task-done
-  run_post_processing || echo "BG watcher: post-processing failed, continuing" >> "$DEBUG_LOG"
-
-  # Signal orchestrator that task is fully done (post-processing complete)
-  touch "$TASK_DONE_MARKER"
-  echo "BG watcher: task-done marker created at $(date '+%Y-%m-%d %H:%M:%S')" >> "$DEBUG_LOG"
-
-  # EXIT trap will see task-done exists and skip (no double-touch)
-) &
-BG_WATCHER_PID=$!
-echo "Background watcher started (PID: $BG_WATCHER_PID)" >&3
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Session context: wrapper writes dynamic values to a file; agent reads it.
 # Prompt is only "/ralph" so the skill is the single source of instructions.
@@ -464,8 +408,8 @@ echo "Session context written to $SESSION_CONTEXT_FILE" >&3
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LAUNCH CLAUDE (interactive; user can redirect or interrupt)
-# Background with wait preserves interactive behavior while capturing PID so the
-# background watcher can detect when the process fully exits before reading stats.
+# Background with wait preserves interactive behavior while capturing PID.
+# wait $CLAUDE_PID blocks until Claude fully exits — stats file is written by then.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CLAUDE_EXIT=0
@@ -475,26 +419,21 @@ readonly PROMPT="/ralph"
 # Capture stderr to log file while still displaying it live (maintains full visibility)
 "${CLAUDE_ARGS[@]}" "$PROMPT" 2> >(tee "$CLAUDE_LOG" >&2) &
 CLAUDE_PID=$!
-echo "$CLAUDE_PID" > "$MARKER_DIR/claude-pid"
 wait $CLAUDE_PID || CLAUDE_EXIT=$?
 
 echo "Claude exited with code: $CLAUDE_EXIT" >&3
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# POST-CLAUDE: If Claude exited (user quit manually) but didn't signal claude-done,
-# trigger the background watcher now so post-processing still runs.
-# ═══════════════════════════════════════════════════════════════════════════════
-
+# Safety net: if Claude exited without touching claude-done, create it now
 if [ ! -f "$CLAUDE_DONE_MARKER" ]; then
-  echo "Claude exited without signaling claude-done - triggering manually" >&3
+  echo "Claude exited without signaling claude-done - touching now" >&3
   touch "$CLAUDE_DONE_MARKER"
 fi
 
-# Wait for background watcher to finish post-processing
-if kill -0 "$BG_WATCHER_PID" 2>/dev/null; then
-  echo "Waiting for post-processing to complete..." >&3
-  wait "$BG_WATCHER_PID" 2>/dev/null || true
-fi
+# Claude has exited — stats file is now written. Run post-processing inline.
+sleep 1  # let final statusline write settle to disk
+run_post_processing || echo "Post-processing failed, continuing" >&3
+touch "$TASK_DONE_MARKER"
+echo "task-done marker created at $(date '+%Y-%m-%d %H:%M:%S')" >&3
 
 # Show completion summary (from post-processing summary file)
 TASK_END_TS=$(date +%s)

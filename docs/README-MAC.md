@@ -64,9 +64,9 @@ git clone https://gitlab.zgtools.net/your-team/your-project.git ~/Documents/your
 
 **Step 2:** Run the setup script — it will find your project automatically:
 ```bash
-.../ralph-starter-kit/scripts/setup.sh
+.../ralph-starter-kit/scripts/setup-project.sh
 ```
-(Replace `...` with wherever you put the starter kit, e.g. `~/Documents/ralph-starter-kit/scripts/setup.sh`)
+(Replace `...` with wherever you put the starter kit, e.g. `~/Documents/ralph-starter-kit/scripts/setup-project.sh`)
 
 The script will ask you a few questions about your project — staging URL, what language the code is in, etc. It auto-detects most things. When in doubt, press Enter to accept the defaults.
 
@@ -74,11 +74,11 @@ The script will ask you a few questions about your project — staging URL, what
 
 | Script | What it does |
 |--------|--------------|
-| `setup.sh` | One-time setup — asks questions, creates config files, installs skills |
-| `ralph.sh` | Runs one task from sprint_plan.md and stops — copied to your project root by setup.sh |
+| `install.sh` | Installs Ralph on your machine (run once) — symlinks skills and agents into `~/.claude/` |
+| `setup-project.sh` | Sets up a project directory for Ralph — asks questions, creates config files |
+| `ralph.sh` | Runs one task from sprint_plan.md and stops — copied to your project root by setup-project.sh |
 | `ralph-continuous.sh` | Runs all tasks from sprint_plan.md, opening a new terminal tab per task |
 | `ralph-task-wrapper.sh` | Runs inside each tab — handles the UI, cost tracking, and post-processing |
-| `install-ralph.sh` | Reinstalls Ralph skills as symlinks into `~/.claude/skills/` |
 
 **What setup creates:**
 
@@ -215,7 +215,7 @@ Claude Code isn't installed. See [What you need](#1-claude-code) above.
 **"`/ralph` not found":**
 The Ralph skills aren't installed. Run the setup script again:
 ```bash
-.../ralph-starter-kit/scripts/setup.sh
+.../ralph-starter-kit/scripts/setup-project.sh
 ```
 
 **Git credential errors:**

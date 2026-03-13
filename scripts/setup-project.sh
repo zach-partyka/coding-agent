@@ -42,6 +42,28 @@ check_prerequisites() {
     echo "   Make sure 'claude' command is available in your PATH"
     exit 1
   fi
+
+  # Check for gum (terminal UI for Ralph updates)
+  if ! command -v gum &>/dev/null; then
+    if ! command -v brew &>/dev/null; then
+      echo "Homebrew not found — installing it first (required for gum)..."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      # Add brew to PATH for the rest of this session (Apple Silicon default path)
+      if [ -f "/opt/homebrew/bin/brew" ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+      elif [ -f "/usr/local/bin/brew" ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+      fi
+    fi
+    if command -v brew &>/dev/null; then
+      echo "Installing gum (terminal UI for Ralph updates)..."
+      brew install gum
+      echo "✓ Installed gum"
+    else
+      echo "⚠️  Could not install Homebrew — update notifications will be text-only"
+      echo "   Install manually: https://brew.sh, then: brew install gum"
+    fi
+  fi
 }
 
 # Run checks
@@ -320,23 +342,9 @@ else
   echo "✓ ralph-continuous.sh already installed at $GLOBAL_RALPH_SCRIPT"
 fi
 
-# Install Ralph skills to Claude Code (symlinks — kit is single source of truth)
-echo "Installing Ralph skills..."
-bash "${STARTER_KIT_DIR}/scripts/install-ralph.sh"
-
-# Install subagents to project
-if [ -d "$STARTER_KIT_DIR/.claude/agents" ]; then
-  echo "Installing subagents..."
-  mkdir -p "$PROJECT_DIR/.claude/agents"
-  for agent in codebase-scout deep-investigator test-runner validation-runner; do
-    if [ ! -f "$PROJECT_DIR/.claude/agents/$agent.md" ]; then
-      cp "$STARTER_KIT_DIR/.claude/agents/$agent.md" "$PROJECT_DIR/.claude/agents/"
-      echo "✓ Installed $agent"
-    else
-      echo "✓ $agent already installed"
-    fi
-  done
-fi
+# Install Ralph skills and agents to Claude Code (symlinks — kit is single source of truth)
+echo "Installing Ralph skills and agents..."
+bash "${STARTER_KIT_DIR}/scripts/install.sh"
 
 # Create sprint_plan.md if it doesn't exist
 if [ ! -f "$PROJECT_DIR/sprint_plan.md" ]; then
@@ -345,12 +353,10 @@ if [ ! -f "$PROJECT_DIR/sprint_plan.md" ]; then
   echo "✓ Created sprint_plan.md"
 fi
 
-# Create RALPH.md from template
-if [ ! -f "$PROJECT_DIR/RALPH.md" ]; then
-  echo "Creating RALPH.md..."
-  cp "$STARTER_KIT_DIR/RALPH.md" "$PROJECT_DIR/RALPH.md"
-  echo "✓ Created RALPH.md"
-fi
+# Link RALPH.md (symlink so all projects share the kit's version)
+echo "Linking RALPH.md..."
+ln -sf "$STARTER_KIT_DIR/RALPH.md" "$PROJECT_DIR/RALPH.md"
+echo "✓ Linked RALPH.md (global — updates automatically with git pull)"
 
 # Create roadmap.md from template
 if [ ! -f "$PROJECT_DIR/roadmap.md" ]; then
@@ -366,24 +372,8 @@ mkdir -p "$PROJECT_DIR/stdlib"
 mkdir -p "$PROJECT_DIR/sprints"
 echo "✓ Created specs/, stdlib/, sprints/"
 
-# Copy stdlib templates (only files that don't already exist)
-if [ -d "$STARTER_KIT_DIR/template/stdlib" ]; then
-  echo "Installing stdlib patterns..."
-  STDLIB_COUNT=0
-  for pattern_file in "$STARTER_KIT_DIR/template/stdlib"/*.md; do
-    filename="$(basename "$pattern_file")"
-    if [ ! -f "$PROJECT_DIR/stdlib/$filename" ]; then
-      cp "$pattern_file" "$PROJECT_DIR/stdlib/"
-      echo "✓ Installed stdlib/$filename"
-      STDLIB_COUNT=$((STDLIB_COUNT + 1))
-    else
-      echo "✓ stdlib/$filename already exists"
-    fi
-  done
-  if [ "$STDLIB_COUNT" -gt 0 ]; then
-    echo "  Installed $STDLIB_COUNT stdlib pattern files. Customize for your project."
-  fi
-fi
+# stdlib/ is intentionally empty — stack standards now live in ralph-config.md
+echo "✓ stdlib/ directory ready (stack standards are in ralph-config.md ## Stack Standards)"
 
 # Copy sprint templates
 if [ ! -f "$PROJECT_DIR/sprints/sprint_history.md" ]; then
@@ -397,11 +387,11 @@ echo ""
 echo "Files created:"
 echo "  ✓ ralph.sh (launcher)"
 echo "  ✓ ralph-config.md (configuration)"
-echo "  ✓ RALPH.md (build instructions)"
+echo "  ✓ RALPH.md (build instructions — symlinked to kit, updates with git pull)"
 echo "  ✓ roadmap.md (product roadmap — Now/Next/Later)"
 echo "  ✓ sprint_plan.md (sprint tracker)"
 echo "  ✓ specs/ (feature specifications)"
-echo "  ✓ stdlib/ (technical patterns — security, testing, validation, docs, API routes)"
+echo "  ✓ stdlib/ (empty — stack standards live in ralph-config.md ## Stack Standards)"
 echo "  ✓ sprints/ (sprint archives + history)"
 echo "  ✓ ralph-continuous.sh available at $GLOBAL_RALPH_DIR/"
 echo ""
@@ -477,7 +467,7 @@ echo ""
 echo "1. Customize RALPH.md with your project's build/test instructions"
 echo "2. Add items to roadmap.md (Now section = ready for sprints)"
 echo "3. Add specs to specs/ directory"
-echo "4. Review stdlib/ patterns — customize for your stack, add project-specific patterns"
+echo "4. Review the ## Stack Standards section in ralph-config.md — customize for your stack"
 echo "5. Run your first sprint:"
 echo ""
 echo "   Option A (with hotkey): Press Shift+Cmd+R"

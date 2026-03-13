@@ -1,5 +1,5 @@
 ---
-name: codebase-scout
+name: code-explorer
 description: Use this agent to search the codebase for relevant files, existing patterns, and code to extend before implementing a task. Returns a structured summary instead of raw grep/glob output.
 tools: Glob, Grep, Read, Bash
 model: sonnet

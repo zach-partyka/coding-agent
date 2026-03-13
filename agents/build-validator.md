@@ -1,5 +1,5 @@
 ---
-name: validation-runner
+name: build-validator
 description: Use this agent to run npm run check and return a clean pass/fail result with specific error locations, keeping compiler output out of the parent context.
 tools: Bash
 model: haiku

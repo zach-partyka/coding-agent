@@ -1,6 +1,6 @@
 ---
-name: test-runner
-description: Use this agent to run Playwright tests against staging and return classified results — identifies whether failures are implementation bugs, stale selectors, timing issues, or infrastructure problems.
+name: playwright-runner
+description: Use this agent to run Playwright tests against the deploy target and return classified results — identifies whether failures are implementation bugs, stale selectors, timing issues, or infrastructure problems.
 tools: Bash, Read, Grep
 model: sonnet
 color: magenta
@@ -18,7 +18,7 @@ You will receive:
 ## Workflow
 
 1. `cd` to the project directory.
-2. Run Playwright tests against staging:
+2. Run Playwright tests against the deploy target:
    ```bash
    STAGING_URL=$STAGING_URL npm test
    ```
@@ -42,7 +42,7 @@ Classify each failure into exactly one category:
 
 - **UNRELATED** — The failure has nothing to do with the current change. The test was already broken or tests a different feature entirely. Examples: test for a page you didn't touch fails on a known flaky assertion.
 
-- **INFRASTRUCTURE** — The test environment itself is broken. Examples: staging is down, network timeout, browser launch failed, test framework error.
+- **INFRASTRUCTURE** — The test environment itself is broken. Examples: deploy target is down, network timeout, browser launch failed, test framework error.
 
 ## Output Format
 
@@ -54,7 +54,7 @@ Classify each failure into exactly one category:
 **Tests:** N passed, 0 failed
 **Duration:** Xs
 
-All Playwright tests passed against staging.
+All Playwright tests passed against the deploy target.
 ```
 
 ### If tests fail:
@@ -88,14 +88,14 @@ All Playwright tests passed against staging.
 [1-2 sentence explanation of the recommendation]
 ```
 
-### Catastrophic failure (>50% tests failing OR staging unresponsive):
+### Catastrophic failure (>50% tests failing OR deploy target unresponsive):
 
 ```
 ## Test Result: CATASTROPHIC
 
 **Tests:** N passed, M failed (>50% failure rate)
 
-Staging may be broken. Recommend rollback before further investigation.
+Deploy target may be broken. Recommend rollback before further investigation.
 
 ### Top Failures
 (list first 5 failures with classification)
@@ -103,7 +103,7 @@ Staging may be broken. Recommend rollback before further investigation.
 ### Recommendation
 **ACTION:** BLOCK
 
-[Explanation — e.g. "Staging returned 502 on all requests" or "15 of 20 tests failed with timeout errors suggesting the deploy broke the app"]
+[Explanation — e.g. "Deploy target returned 502 on all requests" or "15 of 20 tests failed with timeout errors suggesting the deploy broke the app"]
 ```
 
 ## Rules

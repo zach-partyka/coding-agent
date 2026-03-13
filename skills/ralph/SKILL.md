@@ -2,75 +2,56 @@
 name: ralph
 description: Building mode for Ralph - implements ONE thing from sprint_plan.md and stops. Creates branch, implements per specs/stdlib, commits/pushes to GitLab, merges to main, waits for deploy, runs Playwright against the deploy target. Updates sprint_plan.md and RALPH.md. Stops after one thing for human review.
 disable-model-invocation: true
+argument-hint: [task-id]
 ---
+
+## Session Context
+!`cat .ralph-markers/session-context.txt 2>/dev/null || echo "No session context — manual run"`
+
+## Current Sprint
+!`head -80 sprint_plan.md 2>/dev/null || echo "No sprint_plan.md found — run /ralph-plan first"`
 
 # Ralph Building Mode
 
-**One task per run.** Pick the single next **open** task from `sprint_plan.md` (one unchecked `[ ]` item). Do that task. Then stop. Do not start a second task. Do not re-do or re-describe work that is already completed — that wastes tokens. The next run will get the next open task.
+**One task per run.** Do one open task, then stop. No second tasks. No re-describing completed work.
 
-## When to use this skill
+## What's Already in This Prompt
 
-- There is a `sprint_plan.md` (from `/ralph-plan`).
-- You are doing the **next open task only**, then stopping for human review.
+The skill template above injects two things. **Use them directly. Do NOT re-read these files.**
 
-## When the prompt is only "/ralph" (run from terminal wrapper)
+1. **Session Context** — contains `projectDir`, `taskNum`, `doneMarker`, `sprintCompleteMarker`
+2. **Current Sprint** — first 80 lines of `sprint_plan.md`
 
-You were started from a terminal (e.g. iTerm2). The prompt is just `/ralph`. All session data is in a file.
+If Session Context says "No session context — manual run", ask for the project directory.
+If Current Sprint says "No sprint_plan.md found", tell the user to run `/ralph-plan`.
 
-**Step 1 — Read session context.**  
-Open `.ralph-markers/session-context.txt` in the project. The wrapper wrote it before starting you. It has one line per key:
-- `projectDir=` → use this path as the project directory for everything below.
-- `taskNum=` → **run index only** (1st run, 2nd run, …). Used for marker file names. **It is NOT the task ID in sprint_plan.md.** Do not use it to choose which task to do.
-- `doneMarker=` → when the task is done, run `touch` on this path.
-- `sprintCompleteMarker=` → if there are no unchecked tasks left, also run `touch` on this path.
+### Session Context Keys
 
-**Which task to do:** Always pick the **single next open task** from sprint_plan.md (first unchecked `[ ]` by priority: Critical Path → High → Medium → Low). That task has a number like **#9** in the plan — that is the sprint task ID. Implement that one. Ignore the `taskNum` value in session-context when selecting the task.
+| Key | Meaning |
+|---|---|
+| `projectDir` | Project directory. Use for all file paths. |
+| `taskNum` | **Run index** (1st, 2nd, 3rd run). For marker filenames only. **Not the task ID.** |
+| `doneMarker` | `touch` this path when the task is done. |
+| `sprintCompleteMarker` | `touch` this path when no unchecked tasks remain. |
 
-**Step 2 — If the file is missing** (e.g. someone ran /ralph by hand):  
-Ask for the project directory. Do one task from sprint_plan.md, then stop. Do not touch any marker files.
+## Task Selection
 
-**Step 3 — If the file exists:**  
-- Use `projectDir` as the project directory. Do not ask.
-- Do the **one** next open task from sprint_plan.md (first unchecked `[ ]` by priority). The plan uses IDs like #1, #2, #9 — use the plan, not `taskNum` from the file. Do not start another task. Do not re-do completed tasks.
-- When that task is done: `touch` the path in `doneMarker`.
-- If the sprint has no unchecked tasks left: `touch` the path in `sprintCompleteMarker`.
-- Then stop. The next run will pick the next open task.
+**If `/ralph 4` or `/ralph #4`:** Find task #4 in sprint_plan.md. If completed or blocked, say so and stop.
+
+**If `/ralph` (no argument):** Pick the first unchecked `[ ]` item by priority: Critical Path > High > Medium > Low. Skip the Blocked section. The task ID is the `#N` in the plan (e.g. **#9**) — this is unrelated to `taskNum`.
+
+If all tasks are done or blocked, `touch` both markers and stop.
 
 ## Workflow
 
-### 1. Get Project Directory
+### 1. Study Context
 
-1. If you read `.ralph-markers/session-context.txt` and it has `projectDir=...`, use that path. Stop here.
-2. Else if the user message contains "Project directory:" and a path, use that path. Stop here.
-3. Else ask: "Which project directory should I work in? (Full path to the repo that has sprint_plan.md and RALPH.md)"
-
-### 2. Validate Directory
-
-Run `ls -la` on the project directory.
-
-**Must be there (stop if missing):** `sprint_plan.md`, `RALPH.md`. If sprint_plan.md is missing, tell the user to run `/ralph-plan`.
-
-**Optional (warn but continue):** `specs/`, `stdlib/`.
-
-Do not use glob patterns in commands; they can fail even when the dirs exist.
-
-### 3. Study Context
-
-Read these in parallel:
-- **sprint_plan.md** — identify unchecked `[ ]` items and priorities
-- **specs/** — what to build (requirements, constraints, success criteria)
-- **stdlib/** — how to build (coding patterns, conventions)
+Read these if they exist (do NOT read sprint_plan.md — it's already injected):
+- **specs/** — requirements, constraints, success criteria
+- **ralph-config.md** — project config + stack standards (the ## Stack Standards section)
 - **RALPH.md** — build/run/test instructions
 
-### 4. Select Task
-
-Choose the **single next open task** — the first unchecked `[ ]` item in sprint_plan.md. Skip BLOCKED. Ignore all `[x]` items; do not re-do or describe completed work.
-
-**Order to pick:** Critical Path first, then High, then Medium, then Low. The task has an ID in the plan (e.g. **#9**). That ID is from the plan, not from session-context `taskNum` (which is the run index). If everything is blocked or done, stop and say so. You do only this one task this run.
-
-Say which task you chose (ID and title from the plan) and which section it was in.
-
-### 5. Clock In
+### 2. Clock In
 
 Mark the task IN PROGRESS in sprint_plan.md:
 
@@ -80,83 +61,56 @@ Mark the task IN PROGRESS in sprint_plan.md:
   - Model: Sonnet 4.6 (default)
 ```
 
-Check the prompt for `"Ralph model: [value]"` — if present, note it.
+If the prompt contains `"Ralph model: [value]"`, note it.
 
-Shell handles timestamp capture. You just mark the status.
+### 3. Investigation Tasks
 
-### 6. Investigation Tasks
+If the task says "investigate", "audit", "research", or "diagnose":
 
-If the current task is labeled "investigate", "audit", "research", or "diagnose" — do the investigation, then **immediately add follow-up tasks as unchecked `[ ]` items** in `sprint_plan.md` before marking the investigation complete.
+1. Do the investigation (10-15 min max).
+2. Write findings as sub-bullets under the task.
+3. Add follow-up tasks as new unchecked `[ ]` items in sprint_plan.md. **This is required** — the shell loop stops if no unchecked tasks exist.
+4. Move the investigation to Completed.
 
-**Why this matters:** The shell loop only continues if unchecked `[ ]` tasks exist. If you write findings as prose but don't add task items, Ralph stops and the sprint stalls.
+Skip this step for features with clear specs or continuation work.
 
-**How to complete an investigation task:**
+### 4. Search Codebase
 
-1. Do the investigation (time-box to 10–15 min).
-2. Write a short findings summary as sub-bullets under the task.
-3. Add each recommended follow-up as a new unchecked task in the appropriate priority section:
+**Always search before writing new code.** Use the `code-explorer` agent.
 
-```markdown
-- [ ] **#N** Fix [specific thing found] (from investigation #M)
-```
+Search for: (A) files matching the feature name, (B) related functions/imports, (C) existing partial implementations.
+For UI text/labels: grep all of `client/` and list every occurrence.
 
-4. Move the investigation task to Completed.
-5. The shell loop will pick up the new tasks automatically.
+Extend existing code when possible. Add new code only for different areas. Block if unclear.
 
-**Skip investigation mode for:** new features with clear specs, continuation of previous sprint work.
+Write one short summary. No long grep output.
 
-### 7. Search Codebase
+### 5. Block on Ambiguity
 
-**Always search before writing new code.** Most past failures were from adding new code instead of extending existing code.
+Do not implement if you'd have to guess IDs, formats, field names, API params, or integration points. Do not implement if specs conflict.
 
-With the task marked IN PROGRESS, search for: (A) files whose names match the feature, (B) related function names and imports, (C) similar or partial implementations (including Python for API work). For **UI text or labels**, grep all of `client/` (e.g. `components/layout/`, `components/mobile/`, `pages/`) and list every place the text appears; fix all of them or block.
+To block: move the task to the Blocked section in sprint_plan.md with exact questions, then stop.
 
-If you find existing code: **extend** it when it fits; **add new** only when it’s a different area or stack; **block** when it’s unclear or a big design choice.
+### 6. Check Test Requirements
 
-Write one short "Search complete" summary and use that for decisions. Do not paste long grep output.
+**Tests required for:** user-facing features, critical flows, form changes, auth, external API integrations.
+**Tests optional for:** refactoring, CSS-only, docs, backend-only with no UI.
 
-### 8. Block on Ambiguity
+If required, the task is not done until Playwright tests pass against the deploy target.
 
-Do **not** implement if you would have to guess: IDs, formats, field names, API params, or how this fits with existing code. Do **not** implement if specs conflict or stdlib doesn’t cover the pattern. If you’ve added 2–3 separate pieces and they’re not wired together, stop and check sprint_plan.md for an integration task; if none or unclear, block.
+### 7. Implement
 
-**To block:** Put the task in the Blocked section of sprint_plan.md with the exact questions, then exit.
+Follow specs/ and ralph-config.md Stack Standards patterns. Full implementation — no placeholders, no TODOs.
 
-### 9. Check Test Requirements
+### 8. Validate
 
-Determine if Playwright tests are required before implementing.
+Use the `build-validator` agent to run `npm run check`. TypeScript must compile. Fix errors before proceeding.
 
-**Tests required for:** user-facing features, critical user flows, form changes, auth, external API integrations.
+### 9. Git
 
-**Tests optional for:** internal refactoring, CSS-only changes, documentation, backend-only with no UI impact.
+**Branch:** `ralph/task-{N}-{slug}` (slug: lowercase, hyphens, max 30 chars)
 
-If required, task is not complete until:
-- Feature code implemented
-- `data-testid` added to relevant UI elements
-- Playwright test written (use AI test generator if available, otherwise follow patterns in existing `tests/*.spec.ts`)
-- Test covers happy path and error states
-- Test passes against the deploy target
-
-If blocked on test writing, mark BLOCKED with reason.
-
-### 10. Implement
-
-Follow specs/ requirements and stdlib/ patterns. Full implementation or nothing — no placeholders, no TODOs. If specs say deterministic, no AI/DB calls. If stdlib says Zod, use Zod.
-
-### 11. Local Validation
-
-```bash
-npm run check
-```
-
-TypeScript must compile. Fix errors before proceeding. Do not push broken code.
-
-We skip local E2E — real testing happens against the deploy target.
-
-### 12. Git Workflow
-
-**A. Branch:** `ralph/task-{N}-{slug}` (slug: lowercase, hyphens, max 30 chars)
-
-**B. Commit:** Stage specific files (not `git add -A`):
+**Commit:** Stage specific files (not `git add -A`):
 ```bash
 git commit -m "$(cat <<'EOF'
 [Task #N] Brief description
@@ -169,145 +123,110 @@ EOF
 )"
 ```
 
-**C. Push:** `git push -u origin ralph/task-{N}-{slug}`
+**Push:** `git push -u origin ralph/task-{N}-{slug}`
 
-**D. Merge to main:**
+**Merge:**
 ```bash
 git checkout main && git pull origin main
 git merge ralph/task-{N}-{slug}
 git push origin main
 ```
 
-If merge conflicts: stop, report details, mark BLOCKED. Human resolves.
+Merge conflicts: stop, report, mark BLOCKED. Human resolves.
 
-### 13. Wait for Deploy
+### 10. Wait for Deploy
 
-Auto-deploys in ~5 minutes after pushing to main.
+Auto-deploys ~5 minutes after push to main.
 
 ```bash
 sleep 300
 curl -s -o /dev/null -w "%{http_code}" $RALPH_DEPLOY_URL/health
 ```
 
-Expected: HTTP 200. If not responding, check the GitLab pipeline. If pipeline failed, BLOCK. If still running, wait 2 more minutes.
+Expected: HTTP 200. If not, check pipeline. Pipeline failed = BLOCK. Still running = wait 2 more minutes.
 
-### 14. Test and Verify
+### 11. Test and Verify
 
-**A. Run Playwright against the deploy target:**
+Use the `playwright-runner` agent:
 
 ```bash
 STAGING_URL=$RALPH_DEPLOY_URL npm test
 ```
 
-Test against the deploy target, not localhost. After each run, write a short test summary (e.g., "12 passed, 0 failed"). Use only this summary for decisions — do not re-paste full test output.
+Write a short summary (e.g. "12 passed, 0 failed"). No full test output.
 
-**B. Visual verification for UI changes:**
+**UI changes:** Open deploy target in browser, confirm visually. Run `git status` — modified source files means NOT deployed. Do not mark UI tasks complete without visual verification.
 
-Sprint 3 Learning: 36% of UI tasks failed because code was committed but never visually verified.
+**Test failures:** Determine if your code broke the test or if the test needs healing. Try up to 2 fixes, then BLOCK.
 
-1. Open the deploy target in browser, navigate to affected page
-2. Confirm the change is visible (check mobile viewport if applicable)
-3. Run `git status` — if source files are modified, the change was NOT deployed
-
-Do not mark UI tasks complete without visual verification.
-
-**C. If tests fail:**
-
-Determine if the test broke due to your code changes (heal the test with playwright-test-healer) or if your implementation has a bug (fix the code). Try up to 2 fix attempts, then BLOCK.
-
-**D. Catastrophic failure (>50% tests failing or deploy target unresponsive):**
-
+**Catastrophic failure (>50% failing or deploy unresponsive):**
 ```bash
 git revert HEAD
 git push origin main
 ```
+Mark BLOCKED. Do not retry — alert user.
 
-Wait for rollback deploy, mark task BLOCKED with failure details. Do not attempt additional rollback attempts — alert user for manual intervention.
+### 12. Update sprint_plan.md
 
-### 15. Update sprint_plan.md
+Update as you work, not just at the end.
 
-Update the plan as you work, not just at the end.
-
-**Blocked mid-work:** Move task to Blocked section with reason and what's needed.
-
-**Discovered new work:** Add to appropriate priority section with `(discovered during #N)`.
-
-**Completing task:** Move the task to the Completed section. Use this format (keep the line `**Performance:** SHELL_WILL_UPDATE` exactly; the shell fills in duration/cost later):
-
+**Completing:** Move to Completed with this format:
 ```markdown
 - [x] **#4** Add globalTeardown to playwright.config.ts
-  - Added tests/fixtures/globalTeardown.ts
-  - Configured playwright.config.ts
-  - **Performance:** SHELL_WILL_UPDATE
+  - What you did
+  - **Performance:**
 ```
+The `**Performance:**` line is required but leave it empty — the shell wrapper fills in duration and cost after you exit.
+
+**Discovered work:** Add as new `[ ]` items with `(discovered during #N)`.
 
 Update the "Last updated" timestamp.
 
-### 16. Update RALPH.md
+### 13. Update RALPH.md
 
-Only if you learned something new about building/running the project — a non-obvious build command, environment quirk, or validation pattern. One line per learning. Most tasks don't need a RALPH.md update.
+Only if you learned a non-obvious build/run/test fact. One line. Most tasks skip this.
 
-### 17. Finish
+### 14. Finish
 
-**Sprint not complete:** Report in this format, then stop:
+Touch `doneMarker`. If no unchecked tasks remain, also touch `sprintCompleteMarker`.
 
+**Sprint not complete:**
 ```
 === Task Complete ===
-Implemented: [one-line task description]
+Implemented: [one-line description]
 Validation: TypeScript, GitLab, Deploy, Playwright
 Sprint Progress: X/Y tasks
 Next: [next task title]
 Run /ralph again to continue.
 ```
 
-**Sprint complete (no unchecked tasks):** Run `/ralph-archive` with the project directory, then stop. Do not start another task.
+**Sprint complete:** Run `/ralph-archive` with the project directory, then stop.
 
 ---
 
-## Time Tracking Reference
+## Time Tracking
 
-Shell handles all time/cost math. You handle status updates.
-
-| Responsibility | You | Shell |
-|---|---|---|
-| Mark IN PROGRESS | Yes | - |
-| Record what you did | Yes | - |
-| Write `**Performance:** SHELL_WILL_UPDATE` | Yes | - |
-| Calculate duration, cost, model label | - | Yes |
-| Replace placeholder with actual data | - | Yes |
-| Update sprint totals | - | Yes |
-
-Why: LLMs are unreliable at arithmetic. Shell math is deterministic.
-
----
+Shell handles all duration/cost math. Write an empty `**Performance:**` line under completed tasks — the shell fills in the values.
 
 ## Edge Cases
 
-**session-context `taskNum` vs sprint_plan task ID:** `taskNum` in the file is the **run index** (1st, 2nd, 3rd run). It is not the task ID (#1, #2, #9) in sprint_plan.md. After a reopened sprint or multiple runs, `taskNum` might be 2 while the only open task in the plan is #9. Always choose by the plan: first open `[ ]` by priority. Ignore `taskNum` for task selection.
-
-**Multiple items at same priority:** Pick the first one in the list.
-
-**Item already implemented:** Search found it exists. Move to Completed, pick next item.
-
-**Item is blocked:** Specs unclear, dependency missing. Move to Blocked section, document why, pick next unblocked item.
-
-**No validation command:** Use standard validations (npm run check + Playwright against deploy target). Note minimal validation in completion entry.
-
-**Unrelated tests fail:** Fix them. You own green tests before marking complete.
-
----
+| Situation | Action |
+|---|---|
+| Multiple tasks at same priority | Pick the first in the list |
+| Task already implemented (found in codebase) | Move to Completed, pick next |
+| Task is blocked | Move to Blocked with reason, pick next unblocked |
+| No validation command available | Use `npm run check` + Playwright. Note minimal validation. |
+| Unrelated tests fail | Fix them. You own green tests. |
 
 ## Success Criteria
 
-Complete when:
-- ONE item implemented (not multiple)
+Done when:
+- One task implemented
 - TypeScript compiles
 - Committed, pushed, merged to main
 - Deployed to deploy target
-- Playwright tests pass against deploy target
+- Playwright tests pass
 - sprint_plan.md updated
-- Code follows specs/ and stdlib/
-- User knows what's next
 
 Fails when:
 - TypeScript won't compile
@@ -315,5 +234,5 @@ Fails when:
 - Deploy fails
 - Tests fail after 2 fix attempts
 - Placeholder implementation
-- Multiple items implemented in one run (do one open task only)
-- Re-doing or re-describing already completed tasks (wastes tokens)
+- Multiple tasks in one run
+- Re-describing completed work

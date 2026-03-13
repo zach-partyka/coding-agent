@@ -1,13 +1,26 @@
-# Ralph config
+# ralph-config.md
 
-Ralph scripts and agents read the block below. See RALPH_CONFIG.md in the Ralph kit.
+Ralph reads the block below for deploy URL, git remote, and validation commands.
 
 ```ralph-config
-RALPH_GIT_REMOTE="https://gitlab.zgtools.net/your-team/your-project.git"
+RALPH_GIT_REMOTE="[your HTTPS git remote]"
 RALPH_GIT_MAIN_BRANCH="main"
-RALPH_DEPLOY_URL="https://your-app-dev.int.zgcp-consumer-nonprod-k8s.zg-int.net"
+RALPH_DEPLOY_URL="[your dev/staging URL]"
 RALPH_DEPLOY_WAIT_SECONDS=300
 RALPH_VALIDATE_LOCAL="npm run check"
 RALPH_VALIDATE_DEPLOY="npm test"
 RALPH_HEALTH_CHECK_PATH="/health"
+RALPH_TEST_ENV_VARS="STAGING_URL=$RALPH_DEPLOY_URL"
 ```
+
+## Stack Standards
+
+Ralph follows these patterns on every task. Edit for your stack.
+
+**Routes:** auth → validate → execute → respond. 400 validation, 500 server, 401 auth. Never expose stack traces.
+**Secrets:** .env is local and gitignored. .env.example is committed. Fail fast if missing — no silent fallbacks.
+**Schema:** Validate at request/response boundaries only. Optional fields safe to add; required fields need migration/default.
+**Selectors:** data-testid > role > label > text. Never generated IDs (e.g. :rg: breaks CSS selectors).
+**Async:** waitForFunction for computed values — button visible ≠ data loaded.
+**Tests:** Update inline with implementation changes. Visual validation required for UI tasks (wait for deploy, open browser).
+**Docs:** README.md for dirs with multiple files. Doc comments on changed public APIs.
