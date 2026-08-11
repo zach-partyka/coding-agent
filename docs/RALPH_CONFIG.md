@@ -6,7 +6,7 @@ One file: **ralph-config.md** at project root. No ralph.config.sh. Scripts load 
 
 ````markdown
 ```ralph-config
-RALPH_GIT_REMOTE="https://gitlab.zgtools.net/team/project.git"
+RALPH_GIT_REMOTE="https://gitlab.your-domain.com/team/project.git"
 RALPH_GIT_MAIN_BRANCH="main"
 RALPH_DEPLOY_URL="https://app-dev.example.com"
 RALPH_DEPLOY_WAIT_SECONDS=300

@@ -113,7 +113,7 @@ claude "/ralph-continuous"
 
 ## Python/FastAPI Example
 
-Complete example for FastAPI projects (Zillow standard).
+Complete example for FastAPI projects.
 
 ### Prerequisites
 
@@ -246,7 +246,7 @@ Then just: `activate-myproject` before pressing `Shift+Cmd+R`
 
 ## Node.js/TypeScript Example
 
-Based on Zillow Marketing Copilot (6 sprints, $7.50 total cost).
+Based on a real project (6 sprints, $7.50 total cost).
 
 ### Prerequisites
 
@@ -570,13 +570,13 @@ pip install -r requirements.txt
 Verify HTTPS remote (not SSH):
 ```bash
 git remote -v
-# Should show: https://gitlab.zgtools.net/...
-# Not: git@gitlab.zgtools.net:...
+# Should show: https://gitlab.your-domain.com/...
+# Not: git@gitlab.your-domain.com:...
 ```
 
 Fix if SSH:
 ```bash
-git remote set-url origin https://gitlab.zgtools.net/your-team/your-repo.git
+git remote set-url origin https://gitlab.your-domain.com/your-team/your-repo.git
 ```
 
 **Issue: Authentication failed**

@@ -331,4 +331,4 @@ npx playwright show-report
 
 ---
 
-**Origin:** Extracted from Marketing Copilot stdlib after 13 sprints of Ralph development. Patterns are framework-agnostic where possible.
+**Origin:** Extracted from internal stdlib after 13 sprints of Ralph development. Patterns are framework-agnostic where possible.
