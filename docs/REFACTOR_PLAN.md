@@ -48,7 +48,10 @@ Create a measurable baseline before adding platforms:
 - Make `template/sprint_plan.md.template` and `skills/ralph-plan/SKILL.md` emit the checkbox format the orchestrator and metrics parser actually require.
 - Ship the archive template and validator referenced by `skills/ralph-archive/SKILL.md`.
 - Stop `scripts/install.sh` from deleting itself and establish a repair/upgrade path.
+- Remove the per-task `RALPH.md` write from step 13 and the frontmatter description in `skills/ralph/SKILL.md`. Project tasks must never modify the kit-wide symlink; until Claude-Mem lands, preserve useful discoveries as concise task notes in `sprint_plan.md` for the archive to consume.
 - Treat missing cost as unavailable, never `$0.00`; suppress savings/ROI calculations when source metrics are missing.
+- Remove the ineffective interactive `--max-turns 50` safety claim. Use explicit task timeout and `user-extended` state instead, and document that an interactive coding-agent session has no model-turn cap.
+- Keep runtime state out of project commits: ignore legacy `.ralph/` and `.ralph-markers/` paths, move new jobs/results into the machine-level runtime directory, and replace broad `git add -A` cleanup with explicit intended paths.
 - Add baseline shell tests before extracting any adapters.
 
 ## Stage 0.5 — Validate the three risky integrations
@@ -61,16 +64,19 @@ Run executable spikes on actual target environments before finalizing adapters:
 
 Do not ship Warp+WSL or claim Codex parity until these pass.
 
-## Stage 1 — Package one shared core with two installers
+## Stage 1 — Package the shared core and installer architecture
 
 - Extract shared configuration, portable date/UUID/path helpers, coding-agent launching, and terminal tab launching from `scripts/ralph.sh`, `scripts/ralph-continuous.sh`, and `scripts/ralph-task-wrapper.sh`.
 - Replace the shared marker with an atomic UUID-keyed job/result record containing project, sprint/task ID, coding agent, model, reasoning, timestamps, state, and exit status. Include `claimed`, `completed`, `failed`, `timed-out`, and `user-extended` states.
 - Keep a temporary `legacy` adapter switch until Mac+iTerm and Windows+Warp are proven.
-- Store machine preferences—coding agent, terminal preference, last model, WSL distribution, Claude-Mem status—in `~/.ralph/config`. Keep project deploy/test/git settings in `ralph-config.md`; optionally allow a project to pin a coding agent.
+- Store machine preferences—coding agent, terminal preference, last model, WSL distribution, Claude-Mem status—in `~/.ralph/config`. On Windows, this always means the WSL home; there is no second Windows-side Ralph config. Keep project deploy/test/git settings in `ralph-config.md`; optionally allow a project to pin a coding agent.
 - Parse project configuration through an explicit key allowlist rather than sourcing arbitrary shell from Markdown.
 - Build one versioned runtime bundle and update it atomically so project launchers cannot remain stale.
-- Add `install-mac.sh` for iTerm/Homebrew/Gum, agent detection, shortcut setup, and shared-core installation.
-- Add `install-windows.ps1` for Warp/WSL detection, WSL distribution selection, Linux-side Gum and shared-core installation, Windows-side Tab Config placement under `%APPDATA%`, and optional Windows shortcut creation.
+- Make the installer roles explicit: `install.sh` becomes the non-self-deleting shared POSIX core installer, `setup-project.sh` remains the shared project configurator, and new platform entry points call those shared components rather than duplicating them.
+- Add `install-mac.sh` as the Mac user-facing entry point for iTerm/Homebrew/Gum, coding-agent detection, shortcut setup, and shared-core installation.
+- Define the `install-windows.ps1` contract here, but do not ship it or place a Warp Tab Config until the dispatcher and Warp adapter land together in Stage 5.
+- Replace the current raw `git pull` update path with one `ralph update` operation: fetch the kit, run the versioned core installer in upgrade mode, refresh generated terminal assets, and roll back if activation fails.
+- Convert copied project launchers into thin stable shims that delegate to the installed runtime so `check_for_updates` cannot recreate the stale-copy problem.
 - Do not duplicate skills, templates, or orchestration between installers.
 
 ## Stage 2 — Preserve and improve the model-selector UX
@@ -86,9 +92,9 @@ Do not ship Warp+WSL or claim Codex parity until these pass.
 
 - Wire `RALPH_AUTO_ARCHIVE` for real. After validated sprint completion, the orchestrator opens a dedicated archive tab; it does not ask the final task session to archive itself.
 - Split responsibilities: deterministic shell code owns locking, max sprint-ID allocation, directories, state, retries, and atomic completion; the coding agent generates archive prose inside the prepared archive.
-- Delete or replace archive steps 10 and 11 that currently write the shared symlinked `RALPH.md` and already generate overlapping multi-sprint insights. Migrate `.ralph/last_insights_sprint` into the new review state and retain existing `performance_insights.md` as evidence.
+- Delete or replace archive steps 10 and 11 that currently write the shared symlinked `RALPH.md` and already generate overlapping multi-sprint insights. Together with the Stage 0 removal of per-task step 13, this eliminates every project workflow writer to the shared file. Migrate `.ralph/last_insights_sprint` into the new review state and retain existing `performance_insights.md` as evidence.
 - Route accepted project patterns to the existing `## Stack Standards` section of project-owned `ralph-config.md`; route follow-up work to that project’s `roadmap.md`. Changes to Ralph’s shared kit require separate explicit confirmation.
-- Track stable `lastArchivedSprint`, `lastReviewedSprint`, and pending review state. A deferred review remains due even if archive directories are renamed or removed.
+- Commit durable review reports under `sprints/`; keep locks, jobs, and deferred-prompt state under `~/.ralph/state/<project-id>/`. Derive `lastArchivedSprint` and `lastReviewedSprint` from stable archive/report manifests so a deferred review remains due without committing machine state.
 - After every five newly archived sprints, show `Review now` or `Save for later`. `Review now` opens a dedicated conversational tab only after task execution and archiving end; it never competes with running sprint tasks.
 - The review presents 3–5 evidence-backed recommendations with Apply/Edit/Skip choices, saves accepted recommendations, and evaluates their outcomes five sprints later.
 - If deferred, offer the review before the next `/ralph-plan` or `$ralph-plan` session.
@@ -112,6 +118,11 @@ Do not ship Warp+WSL or claim Codex parity until these pass.
 - iTerm/Terminal.app use their existing AppleScript path behind the shared tab interface.
 - Windows Terminal retains its `wt.exe` path.
 - Warp uses the approach proven in Stage 0.5: a Windows-side static Tab Config runs a stable dispatcher, each launch claims one UUID-keyed job, URI dispatch must be claimed within a short timeout, and failure falls back inline.
+- Ship `install-windows.ps1` in the same stage as that dispatcher. The Windows installer is the user-facing bootstrap; it selects a WSL distribution and invokes the shared POSIX installer and project configurator inside WSL.
+- Make WSL canonical for Ralph’s core, config, project paths, and job/result records. The Windows side owns only the Warp Tab Config and optional shortcut; it does not read or write Ralph jobs.
+- Generate the Warp startup command as `wsl.exe -d <distribution> -- bash -lc <dispatcher>`. Centralize Windows/WSL path conversion with `wslpath` at the boundary and test drive-letter, UNC, spaces, quotes, and Unicode paths.
+- Support two ways to obtain the Windows bootstrap: run the checked-in script from a Windows-visible clone, or download the pinned release script using a documented PowerShell command. Document process-scoped `-ExecutionPolicy Bypass`, detect stricter managed policies, and fail with a clear manual-install path rather than silently doing nothing.
+- Write the Tab Config only after the WSL-side dispatcher is installed and verified. If either side fails, remove partial Windows assets and leave the previous Ralph installation active.
 - Install a searchable Warp workflow as a convenience, while documenting that workflows paste commands rather than guaranteeing immediate execution.
 - Offer an optional direct Windows shortcut that invokes the Ralph orchestrator Tab Config; do not claim Warp supports binding a specific workflow directly to a custom key.
 - Install Codex-compatible skills as symlinked folders under `~/.agents/skills/`, include `agents/openai.yaml` with implicit invocation disabled, invoke them explicitly with `$ralph*`, and keep Claude skills under `~/.claude/skills/`.
