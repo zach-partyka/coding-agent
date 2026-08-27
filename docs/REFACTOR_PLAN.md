@@ -2,14 +2,15 @@
 
 **Status:** Proposed
 
-This plan incorporates the findings in [REFACTOR_PLAN_REVIEW.md](./REFACTOR_PLAN_REVIEW.md) and follow-up research against current Warp, Codex, Claude-Mem, and Anthropic documentation.
+This plan incorporates the findings in [REFACTOR_PLAN_REVIEW.md](./REFACTOR_PLAN_REVIEW.md) and follow-up research against current Warp, Codex, Claude-Mem, and Anthropic documentation. Stage 0.5 evidence lives in `spikes/stage-0.5/RESULTS.md` (kit working copy).
 
 ## Product decisions
 
 - One Ralph product and shared runtime; do not fork Mac Ralph and Windows Ralph.
-- Two thin setup entry points: `install-mac.sh` and `install-windows.ps1`.
+- **Platforms are Windows and Mac only. No WSL, no Linux runtime.** Windows canonical environment is **Git Bash**. Mac is native bash (Terminal.app / iTerm). An earlier draft made WSL canonical for Ralph core on Windows; that is **retracted**.
+- Two thin setup entry points: `install-mac.sh` and `install-windows.ps1` (the Windows script bootstraps Git Bash / PowerShell; it does not install or select a Linux distro).
 - Tabbed UX is core: one orchestrator/control-tower tab, one fresh interactive tab per task, completed tabs retained for inspection, and a separate Improvement Review tab.
-- Recommend iTerm on Mac and Warp on Windows, but do not bundle either terminal. Keep Terminal.app, Windows Terminal, and inline fallbacks.
+- Recommend iTerm on Mac and Warp on Windows, but do not bundle either terminal. Keep Terminal.app, Windows Terminal, Git Bash, and inline fallbacks.
 - The user chooses Claude Code or Codex during setup. Every sprint still begins with the model selector for that coding agent.
 - Claude-Mem captures evidence automatically. Ralph retains deterministic sprint state, metrics, archiving, and the periodic act of finding improvements.
 - Existing retrospectives and sprint summaries remain unchanged and continue to inform future reviews.
@@ -56,20 +57,20 @@ Create a measurable baseline before adding platforms:
 
 ## Stage 0.5 — Validate the three risky integrations
 
-Run executable spikes on actual target environments before finalizing adapters:
+Run executable spikes on actual **Windows Git Bash** and **Mac** environments before finalizing adapters. Do not require WSL.
 
-1. **Warp and WSL:** Warp Tab Configs cannot currently select a native WSL distribution. Test a Windows-side PowerShell Tab Config whose command launches the chosen distribution through `wsl.exe`, verify interactive Claude/Codex rendering, URI invocation, unique job claiming, and inline fallback when no tab claims the job.
-2. **Codex skills:** Verify global folder symlinks under `~/.agents/skills/`, explicit `$ralph` invocation, `policy.allow_implicit_invocation: false`, dynamic session context without Claude’s `!command` expansion, and Ralph’s named subagent equivalents.
-3. **Gum:** Verify Gum on macOS and inside the selected WSL distribution. Every Gum interaction must also have a plain-text fallback.
+1. **Warp + Git Bash:** A Windows-side Warp Tab Config with `shell = "bash"` runs the dispatcher. Verify interactive TTY, `warp://tab_config/<stem>` from PowerShell/`cmd.exe`, unique job claiming, and inline fallback when no tab claims the job. (Do not use `wsl.exe` as the pane command.)
+2. **Codex skills:** Verify folders under the OS user home `~/.agents/skills/` (Git Bash `$HOME` on Windows, Mac `$HOME`). Prefer directory symlinks; if the FS only copies, record the stale-copy problem. Explicit `$ralph` invocation, `policy.allow_implicit_invocation: false`, session context without Claude’s `!command` expansion, and Ralph’s named subagent equivalents.
+3. **Gum:** Verify Gum on Git Bash (`winget`) and macOS (Homebrew). Every Gum interaction must also have a plain-text `read` fallback.
 
-Do not ship Warp+WSL or claim Codex parity until these pass.
+**Evidence already in (2026-08-27, this Windows kit):** Warp URI **does** open Git Bash tabs and run the dispatcher with stdin TTY. A **5s** claim timeout is too short (~43s to pane start) and double-runs inline+tab. Codex installs natively on Windows (`npm i -g @openai/codex`) but was not logged in. Git Bash `ln -s` produced **copies**, not POSIX symlinks. Gum **v0.17.0** works via winget. macOS Gum remains unproven until a Mac run. Stage 1 must not wait on WSL; keep WT + Git Bash + inline until Warp claim timing is fixed. Do not claim Codex parity until login + invoke pass.
 
 ## Stage 1 — Package the shared core and installer architecture
 
 - Extract shared configuration, portable date/UUID/path helpers, coding-agent launching, and terminal tab launching from `scripts/ralph.sh`, `scripts/ralph-continuous.sh`, and `scripts/ralph-task-wrapper.sh`.
 - Replace the shared marker with an atomic UUID-keyed job/result record containing project, sprint/task ID, coding agent, model, reasoning, timestamps, state, and exit status. Include `claimed`, `completed`, `failed`, `timed-out`, and `user-extended` states.
 - Keep a temporary `legacy` adapter switch until Mac+iTerm and Windows+Warp are proven.
-- Store machine preferences—coding agent, terminal preference, last model, WSL distribution, Claude-Mem status—in `~/.ralph/config`. On Windows, this always means the WSL home; there is no second Windows-side Ralph config. Keep project deploy/test/git settings in `ralph-config.md`; optionally allow a project to pin a coding agent.
+- Store machine preferences—coding agent, terminal preference, last model, Claude-Mem status—in `~/.ralph/config` at the OS user home (Git Bash `$HOME` on Windows, `$HOME` on Mac). There is no WSL config and no second parallel config file. Keep project deploy/test/git settings in `ralph-config.md`; optionally allow a project to pin a coding agent.
 - Parse project configuration through an explicit key allowlist rather than sourcing arbitrary shell from Markdown.
 - Build one versioned runtime bundle and update it atomically so project launchers cannot remain stale.
 - Make the installer roles explicit: `install.sh` becomes the non-self-deleting shared POSIX core installer, `setup-project.sh` remains the shared project configurator, and new platform entry points call those shared components rather than duplicating them.
@@ -117,24 +118,24 @@ Do not ship Warp+WSL or claim Codex parity until these pass.
 
 - iTerm/Terminal.app use their existing AppleScript path behind the shared tab interface.
 - Windows Terminal retains its `wt.exe` path.
-- Warp uses the approach proven in Stage 0.5: a Windows-side static Tab Config runs a stable dispatcher, each launch claims one UUID-keyed job, URI dispatch must be claimed within a short timeout, and failure falls back inline.
-- Ship `install-windows.ps1` in the same stage as that dispatcher. The Windows installer is the user-facing bootstrap; it selects a WSL distribution and invokes the shared POSIX installer and project configurator inside WSL.
-- Make WSL canonical for Ralph’s core, config, project paths, and job/result records. The Windows side owns only the Warp Tab Config and optional shortcut; it does not read or write Ralph jobs.
-- Generate the Warp startup command as `wsl.exe -d <distribution> -- bash -lc <dispatcher>`. Centralize Windows/WSL path conversion with `wslpath` at the boundary and test drive-letter, UNC, spaces, quotes, and Unicode paths.
+- Warp uses the approach proven in Stage 0.5: a Windows-side static Tab Config (`shell = "bash"`, Git Bash) runs a stable dispatcher, each launch claims one UUID-keyed job, URI dispatch must be claimed before fallback, and failure falls back inline. Size the claim timeout from evidence (5s was too short on the spike machine; on the order of ~45s, or wait until `.taken`).
+- Ship `install-windows.ps1` in the same stage as that dispatcher. The Windows installer is the user-facing bootstrap; it finds Git Bash, invokes the shared POSIX installer and project configurator **inside Git Bash**, and does not install WSL.
+- Git Bash is canonical for Ralph’s core, config, project paths, and job/result records on Windows. Warp/Windows Terminal only launch tabs. PowerShell is not the Ralph runtime.
+- Generate the Warp pane command as Git Bash running the dispatcher (not `wsl.exe`). Test paths with drive letters, spaces, quotes, and Unicode using Git Bash path rules (`/c/Users/...`), not `wslpath`.
 - Support two ways to obtain the Windows bootstrap: run the checked-in script from a Windows-visible clone, or download the pinned release script using a documented PowerShell command. Document process-scoped `-ExecutionPolicy Bypass`, detect stricter managed policies, and fail with a clear manual-install path rather than silently doing nothing.
-- Write the Tab Config only after the WSL-side dispatcher is installed and verified. If either side fails, remove partial Windows assets and leave the previous Ralph installation active.
+- Write the Tab Config only after the Git Bash dispatcher is installed and verified. If either side fails, remove partial Windows assets and leave the previous Ralph installation active.
 - Install a searchable Warp workflow as a convenience, while documenting that workflows paste commands rather than guaranteeing immediate execution.
 - Offer an optional direct Windows shortcut that invokes the Ralph orchestrator Tab Config; do not claim Warp supports binding a specific workflow directly to a custom key.
-- Install Codex-compatible skills as symlinked folders under `~/.agents/skills/`, include `agents/openai.yaml` with implicit invocation disabled, invoke them explicitly with `$ralph*`, and keep Claude skills under `~/.claude/skills/`.
+- Install Codex-compatible skills under `~/.agents/skills/`, include `agents/openai.yaml` with implicit invocation disabled, invoke them explicitly with `$ralph*`, and keep Claude skills under `~/.claude/skills/`. Prefer directory symlinks; on Windows Git Bash, `ln -s` may copy — Stage 5 must detect that and refresh copies on `ralph update` rather than pretending they are live links.
 - Document any feature that cannot reach parity instead of hiding it behind an adapter.
 
 ## Stage 6 — Verification and documentation
 
 - Test current-project upgrade, missing Gum, missing/unhealthy Claude-Mem, archive-only review, interrupted/duplicate archive, deferred review across restarts, user-extended conversations, failed/timed-out tabs, concurrent projects, model-effort rejection, and paths with spaces/Unicode.
-- Manually validate the complete tab lifecycle on Mac+iTerm and Windows+Warp+WSL: shortcut, model selector, task tabs, intervention, retained history, archive tab, and Improvement Review tab.
+- Manually validate the complete tab lifecycle on Mac+iTerm and Windows+Warp+Git Bash: shortcut, model selector, task tabs, intervention, retained history, archive tab, and Improvement Review tab.
 - Validate Claude Code and Codex independently: instruction discovery, explicit invocation, new session/thread per task, model selection, Claude-Mem capture, and memory retrieval.
 - Update `README.md`, `docs/README-MAC.md`, `docs/README-WINDOWS.md`, `docs/RALPH_CONFIG.md`, and `docs/EXAMPLES.md` to describe only demonstrated behavior.
 
 ## Delivery boundaries
 
-Implement this as one coordinated product plan delivered through separate reviewable stages. Stage 0 and the three spikes are gates: later implementation choices must follow their evidence. Preserve existing Mac+iTerm behavior through the legacy switch until its replacement passes the full lifecycle. Windows support is new development, not an assumed migration.
+Implement this as one coordinated product plan delivered through separate reviewable stages. Stage 0 and the three spikes are gates: later implementation choices must follow their evidence. Preserve existing Mac+iTerm behavior through the legacy switch until its replacement passes the full lifecycle. Windows support is Git Bash (Warp or Windows Terminal for tabs), not WSL, and is new development rather than an assumed migration.

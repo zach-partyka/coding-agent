@@ -1,5 +1,7 @@
 # Review: `ralph-memory-runtime-refactor` plan
 
+> **Product update (2026-08-27):** Ralph is **Windows + Mac only**. No WSL. Windows runtime is **Git Bash**. See the living spec: [REFACTOR_PLAN.md](./REFACTOR_PLAN.md). This review still describes the earlier WSL-based Windows proposal; treat those WSL recommendations as historical, not current.
+
 Review of the proposed refactor that would make Ralph support Claude Code or Codex, recommend iTerm on Mac and Warp with WSL on Windows, integrate Claude-Mem, and add a five-sprint Improvement Review.
 
 - **Reviewed against:** `main` at `095a52b`
