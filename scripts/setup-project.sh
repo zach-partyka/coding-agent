@@ -16,6 +16,20 @@ detect_platform() {
   fi
 }
 
+# link_or_copy SRC DST — native symlink where possible (macOS, or Windows with
+# Developer Mode), else a plain copy. Sets LINK_FELL_BACK=1 on copy. Never aborts.
+link_or_copy() {
+  local src="$1" dst="$2"
+  rm -rf "$dst"
+  if ln -s "$src" "$dst" 2>/dev/null && [ -L "$dst" ]; then
+    return 0
+  fi
+  rm -rf "$dst"
+  cp -R "$src" "$dst"
+  LINK_FELL_BACK=1
+  return 0
+}
+
 check_prerequisites() {
   # Check for bash (should always exist if we're running, but validate)
   if ! command -v bash &> /dev/null; then
@@ -43,26 +57,41 @@ check_prerequisites() {
     exit 1
   fi
 
-  # Check for gum (terminal UI for Ralph updates)
+  # gum is optional — it only styles the "kit update available" notice shown at
+  # the start of a sprint. Never let a failed install abort setup.
   if ! command -v gum &>/dev/null; then
-    if ! command -v brew &>/dev/null; then
-      echo "Homebrew not found — installing it first (required for gum)..."
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-      # Add brew to PATH for the rest of this session (Apple Silicon default path)
-      if [ -f "/opt/homebrew/bin/brew" ]; then
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-      elif [ -f "/usr/local/bin/brew" ]; then
-        eval "$(/usr/local/bin/brew shellenv)"
-      fi
-    fi
-    if command -v brew &>/dev/null; then
-      echo "Installing gum (terminal UI for Ralph updates)..."
-      brew install gum
-      echo "✓ Installed gum"
-    else
-      echo "⚠️  Could not install Homebrew — update notifications will be text-only"
-      echo "   Install manually: https://brew.sh, then: brew install gum"
-    fi
+    case "$PLATFORM" in
+      macos)
+        if ! command -v brew &>/dev/null; then
+          echo "Homebrew not found — installing it first (for gum)..."
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+          if [ -f "/opt/homebrew/bin/brew" ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+          elif [ -f "/usr/local/bin/brew" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+          fi
+        fi
+        if command -v brew &>/dev/null; then
+          echo "Installing gum (styles Ralph's update notifications)..."
+          brew install gum && echo "✓ Installed gum" || true
+        else
+          echo "⚠️  Skipped gum — update notifications will be plain text."
+          echo "   Install later: https://brew.sh, then: brew install gum"
+        fi
+        ;;
+      windows)
+        if command -v winget &>/dev/null; then
+          echo "Installing gum via winget (styles Ralph's update notifications)..."
+          winget install --id charmbracelet.gum -e --accept-source-agreements --accept-package-agreements \
+            || echo "⚠️  winget install failed — update notifications will be plain text."
+        else
+          echo "⚠️  gum not found (optional). Install later: winget install charmbracelet.gum"
+        fi
+        ;;
+      *)
+        echo "⚠️  gum not found (optional — styles update notifications). See https://github.com/charmbracelet/gum"
+        ;;
+    esac
   fi
 }
 
@@ -117,7 +146,9 @@ else
     project="$(dirname "$git_dir")"
     # Exclude the starter kit itself
     [ "$project" != "$STARTER_KIT_DIR" ] && GIT_PROJECTS+=("$project")
-  done < <(find "$HOME/Documents" -name ".git" -maxdepth 4 -type d 2>/dev/null | head -n 10)
+  done < <({ find "$HOME/Documents" -maxdepth 4 -name ".git" -type d 2>/dev/null
+             [ -d "$HOME/OneDrive/Documents" ] && find "$HOME/OneDrive/Documents" -maxdepth 4 -name ".git" -type d 2>/dev/null
+           } | head -n 10)
 
   if [ ${#GIT_PROJECTS[@]} -gt 0 ]; then
     echo "Found git projects:"
@@ -299,6 +330,12 @@ echo ""
 
 # Create ralph-config.md
 echo "Creating ralph-config.md..."
+# On Windows, ralph-continuous.sh opens each task in a Windows Terminal tab whose
+# profile name must match this value (defaults to "Git Bash" if the line is absent).
+WT_PROFILE_CFG=""
+if [ "$PLATFORM" = "windows" ]; then
+  WT_PROFILE_CFG='RALPH_WT_PROFILE="Git Bash"   # must match your Windows Terminal profile name exactly'
+fi
 cat > "$PROJECT_DIR/ralph-config.md" <<EOF
 # Ralph config
 
@@ -313,8 +350,9 @@ RALPH_VALIDATE_LOCAL="$VALIDATE_LOCAL"
 RALPH_VALIDATE_DEPLOY="$VALIDATE_STAGING"
 RALPH_HEALTH_CHECK_PATH="$HEALTH_CHECK"
 RALPH_TEST_ENV_VARS="STAGING_URL=\$RALPH_DEPLOY_URL"
-\`\`\`
 EOF
+[ -n "$WT_PROFILE_CFG" ] && printf '%s\n' "$WT_PROFILE_CFG" >> "$PROJECT_DIR/ralph-config.md"
+printf '%s\n' '```' >> "$PROJECT_DIR/ralph-config.md"
 echo "✓ Created ralph-config.md"
 
 # Copy ralph.sh launcher
@@ -351,10 +389,15 @@ if [ ! -f "$PROJECT_DIR/sprint_plan.md" ]; then
   echo "✓ Created sprint_plan.md"
 fi
 
-# Link RALPH.md (symlink so all projects share the kit's version)
+# Link RALPH.md (symlink so all projects share the kit's version; copy where
+# native symlinks aren't available, e.g. Git Bash without Developer Mode)
 echo "Linking RALPH.md..."
-ln -sf "$STARTER_KIT_DIR/RALPH.md" "$PROJECT_DIR/RALPH.md"
-echo "✓ Linked RALPH.md (global — updates automatically with git pull)"
+link_or_copy "$STARTER_KIT_DIR/RALPH.md" "$PROJECT_DIR/RALPH.md"
+if [ "${LINK_FELL_BACK:-0}" = "1" ]; then
+  echo "✓ Copied RALPH.md (symlinks unavailable — re-run setup-project.sh after 'git pull' in the kit)"
+else
+  echo "✓ Linked RALPH.md (global — updates automatically with git pull)"
+fi
 
 # Create roadmap.md from template
 if [ ! -f "$PROJECT_DIR/roadmap.md" ]; then
@@ -394,54 +437,55 @@ echo "  ✓ sprints/ (sprint archives + history)"
 echo "  ✓ ralph-continuous.sh available at $GLOBAL_RALPH_DIR/"
 echo ""
 
-# iTerm2 hotkey setup (optional but recommended)
-echo "=== Optional: iTerm2 Hotkey Setup (Recommended) ==="
-echo ""
-echo "For the smoothest workflow, set up an iTerm2 hotkey for one-keypress sprint execution."
-echo ""
-echo "This lets you press Shift+Cmd+R to start a sprint instead of typing commands."
-echo ""
-read -p "Would you like instructions for setting up iTerm2 hotkeys? (y/n): " SHOW_HOTKEY_INSTRUCTIONS
+# One-key launch setup (optional) — platform-specific
+if [ "$PLATFORM" = "macos" ]; then
+  echo "=== Optional: iTerm2 Hotkey Setup (Recommended) ==="
+  echo ""
+  echo "For the smoothest workflow, set up an iTerm2 hotkey for one-keypress sprint execution."
+  echo ""
+  echo "This lets you press Shift+Cmd+R to start a sprint instead of typing commands."
+  echo ""
+  read -p "Would you like instructions for setting up iTerm2 hotkeys? (y/n): " SHOW_HOTKEY_INSTRUCTIONS
 
-if [ "$SHOW_HOTKEY_INSTRUCTIONS" == "y" ]; then
-  echo ""
-  echo "📋 iTerm2 Hotkey Setup Instructions:"
-  echo ""
-  echo "1. Open iTerm2 Preferences:"
-  echo "   Press Cmd+, or use menu: iTerm2 → Preferences"
-  echo ""
-  echo "2. Navigate to Keys:"
-  echo "   Preferences → Keys → Key Bindings"
-  echo ""
-  echo "3. Add new hotkey:"
-  echo "   Click the '+' button at bottom left"
-  echo ""
-  echo "4. Configure the hotkey:"
-  echo "   • Keyboard Shortcut: Press Shift+Cmd+R"
-  echo "   • Action: Select 'Send Text with vim Special Chars'"
-  echo "   • Text: Type exactly:  claude \"/ralph-continuous\"\\n"
-  echo "     (Important: Include the \\n at the end)"
-  echo ""
-  echo "5. Click OK to save"
-  echo ""
-  echo "6. Test your hotkey:"
-  echo "   • Make sure you're in your project directory (cd $PROJECT_DIR)"
-  echo "   • Press Shift+Cmd+R"
-  echo "   • You should see Ralph start and open new tabs for each task"
-  echo ""
-  echo "Optional: Set up additional hotkeys:"
-  echo "  • Shift+Cmd+P → claude \"/ralph-plan\"\\n     (sprint planning)"
-  echo "  • Shift+Cmd+T → claude \"/ralph\"\\n          (single task)"
-  echo "  • Shift+Cmd+A → claude \"/ralph-archive\"\\n  (archive sprint)"
-  echo ""
-  echo "For detailed troubleshooting, see: README-MAC.md"
-  echo ""
+  if [ "$SHOW_HOTKEY_INSTRUCTIONS" == "y" ]; then
+    echo ""
+    echo "📋 iTerm2 Hotkey Setup Instructions:"
+    echo ""
+    echo "1. Open iTerm2 Preferences:"
+    echo "   Press Cmd+, or use menu: iTerm2 → Preferences"
+    echo ""
+    echo "2. Navigate to Keys:"
+    echo "   Preferences → Keys → Key Bindings"
+    echo ""
+    echo "3. Add new hotkey:"
+    echo "   Click the '+' button at bottom left"
+    echo ""
+    echo "4. Configure the hotkey:"
+    echo "   • Keyboard Shortcut: Press Shift+Cmd+R"
+    echo "   • Action: Select 'Send Text with vim Special Chars'"
+    echo "   • Text: Type exactly:  claude \"/ralph-continuous\"\\n"
+    echo "     (Important: Include the \\n at the end)"
+    echo ""
+    echo "5. Click OK to save"
+    echo ""
+    echo "6. Test your hotkey:"
+    echo "   • Make sure you're in your project directory (cd $PROJECT_DIR)"
+    echo "   • Press Shift+Cmd+R"
+    echo "   • You should see Ralph start and open new tabs for each task"
+    echo ""
+    echo "Optional: Set up additional hotkeys:"
+    echo "  • Shift+Cmd+P → claude \"/ralph-plan\"\\n     (sprint planning)"
+    echo "  • Shift+Cmd+T → claude \"/ralph\"\\n          (single task)"
+    echo "  • Shift+Cmd+A → claude \"/ralph-archive\"\\n  (archive sprint)"
+    echo ""
+    echo "For detailed troubleshooting, see: docs/EXAMPLES.md"
+    echo ""
 
-  read -p "Open iTerm2 Preferences now? (y/n): " OPEN_ITERM_PREFS
+    read -p "Open iTerm2 Preferences now? (y/n): " OPEN_ITERM_PREFS
 
-  if [ "$OPEN_ITERM_PREFS" == "y" ]; then
-    # AppleScript to open iTerm2 preferences to the Keys pane
-    osascript <<EOF
+    if [ "$OPEN_ITERM_PREFS" == "y" ]; then
+      # AppleScript to open iTerm2 preferences to the Keys pane
+      osascript <<'OSA'
 tell application "iTerm"
   activate
 end tell
@@ -451,12 +495,27 @@ tell application "System Events"
     keystroke "," using {command down}
   end tell
 end tell
-EOF
-    echo ""
-    echo "✓ Opened iTerm2 Preferences"
-    echo "  Navigate to: Keys → Key Bindings → Click '+'"
-    echo ""
+OSA
+      echo ""
+      echo "✓ Opened iTerm2 Preferences"
+      echo "  Navigate to: Keys → Key Bindings → Click '+'"
+      echo ""
+    fi
   fi
+elif [ "$PLATFORM" = "windows" ]; then
+  echo "=== Optional: Windows Terminal one-key launch ==="
+  echo ""
+  echo "Bind a key in Windows Terminal so one keypress starts a sprint."
+  echo ""
+  echo "  1. Windows Terminal → Ctrl+, → \"Open JSON file\""
+  echo "  2. Add to the \"actions\" array:"
+  echo '       { "command": { "action": "sendInput", "input": "claude \"/ralph-continuous\"\r" }, "id": "User.ralphContinuous" }'
+  echo "  3. Add to the \"keybindings\" array:"
+  echo '       { "id": "User.ralphContinuous", "keys": "ctrl+shift+r" }'
+  echo ""
+  echo "  Full walkthrough (incl. the no-prompt variant and profile-name notes):"
+  echo "    $STARTER_KIT_DIR/docs/EXAMPLES.md  (\"Windows Terminal Hotkey Setup\")"
+  echo ""
 fi
 
 echo ""
@@ -468,9 +527,15 @@ echo "3. Add specs to specs/ directory"
 echo "4. Review the ## Stack Standards section in ralph-config.md — customize for your stack"
 echo "5. Run your first sprint:"
 echo ""
-echo "   Option A (with hotkey): Press Shift+Cmd+R"
+if [ "$PLATFORM" = "windows" ]; then
+  echo "   Option A (with hotkey): Press Ctrl+Shift+R  (after the Windows Terminal setup above)"
+  HELP_DOC="docs/README-WINDOWS.md"
+else
+  echo "   Option A (with hotkey): Press Shift+Cmd+R"
+  HELP_DOC="docs/README-MAC.md"
+fi
 echo "   Option B (command):     claude \"/ralph-plan\""
 echo "   Option C (wrapper):     ./ralph.sh --plan"
 echo ""
-echo "For help: cat $STARTER_KIT_DIR/README-MAC.md"
+echo "For help: cat $STARTER_KIT_DIR/$HELP_DOC"
 echo ""
