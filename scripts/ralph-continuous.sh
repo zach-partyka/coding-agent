@@ -174,17 +174,17 @@ check_blocked() {
 
 # Detect which terminal app to use
 detect_terminal() {
-  if [ "$TERM_PROGRAM" = "iTerm.app" ]; then
+  if [ "${TERM_PROGRAM:-}" = "iTerm.app" ]; then
     echo "iterm"
-  elif [ "$TERM_PROGRAM" = "Apple_Terminal" ]; then
+  elif [ "${TERM_PROGRAM:-}" = "Apple_Terminal" ]; then
     echo "terminal"
-  elif [ "$TERM_PROGRAM" = "vscode" ]; then
+  elif [ "${TERM_PROGRAM:-}" = "vscode" ]; then
     echo "vscode"
-  elif command -v wt.exe &> /dev/null && [ -n "$WT_SESSION" ]; then
+  elif command -v wt.exe &> /dev/null && [ -n "${WT_SESSION:-}" ]; then
     echo "windows-terminal"
   else
     # Default to Terminal.app on macOS
-    if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "${OSTYPE:-}" == "darwin"* ]]; then
       echo "terminal"
     else
       echo "inline"
