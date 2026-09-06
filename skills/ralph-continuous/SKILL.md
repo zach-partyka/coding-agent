@@ -76,7 +76,7 @@ Run the bash script:
 ```
 
 The script:
-1. Detects your terminal (Terminal.app, iTerm2, or VS Code)
+1. Detects your terminal (Terminal.app, iTerm2, or Windows Terminal)
 2. Opens a **new tab** for each task (or falls back to inline if needed)
 3. Waits for task completion via marker file
 4. Loops until all tasks complete or one blocks
@@ -150,16 +150,15 @@ NO action needed - tracking happens automatically in each `/ralph` invocation. S
 
 ## Terminal Support
 
-| Terminal | Full UI | How |
+| Terminal | Per-task tabs | How |
 |----------|---------|-----|
-| Terminal.app | ✅ | Opens new tabs via AppleScript |
-| iTerm2 | ✅ | Opens new tabs via AppleScript |
-| VS Code | ✅ | Uses `script` command for PTY allocation |
-| Other | ⚠️ | Falls back to text mode |
+| Terminal.app (macOS) | ✅ | New tabs via AppleScript |
+| iTerm2 (macOS) | ✅ | New tabs via AppleScript |
+| Windows Terminal | ✅ | New tabs via `wt.exe` (needs `RALPH_WT_PROFILE` to match a profile) |
+| VS Code / other | ⚠️ | Inline — tasks run one after another in the same pane |
 
-**All three major terminals now support full interactive UI!**
-
-VS Code uses a clever trick: the `script` command allocates a pseudo-terminal, making Claude think it has a real TTY. You get the full interactive experience in the same terminal.
+Inline mode does the same work with the same fresh-context-per-task guarantee;
+it just doesn't open a separate tab per task.
 
 ---
 
@@ -172,8 +171,9 @@ VS Code uses a clever trick: the `script` command allocates a pseudo-terminal, m
 
 ## When NOT to Use
 
-- Running headless/overnight (requires active terminal)
-- On Linux (AppleScript tab-spawning is macOS only, but PTY mode works)
+- Running headless/overnight (requires an active terminal)
+- On Linux / WSL (unsupported — Ralph targets macOS and Windows Git Bash; it
+  runs inline at best)
 
 ---
 

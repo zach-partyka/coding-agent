@@ -131,6 +131,10 @@ Ralph auto-detects your project, reads the current state (existing sprint, roadm
 claude "/ralph-continuous"
 ```
 
+At the start Ralph asks two quick questions in this tab — which model to use, and
+(if the kit has updates) whether to pull them — so answer those before stepping
+away. After that it runs on its own.
+
 Ralph opens a new terminal tab for each task and works through them one at a time. You'll see it:
 
 - Reading your code to understand what to change
@@ -149,15 +153,19 @@ Each task typically takes 5–20 minutes. A 5-task sprint typically takes 1–2 
 
 Ralph opens new tabs automatically when running `/ralph-continuous`. For this to work on Windows, you need **Windows Terminal** (available free from the Microsoft Store — search "Windows Terminal").
 
-After installing Windows Terminal, add your profile name to the `ralph-config` block in `ralph-config.md`:
+`setup-project.sh` already writes a `RALPH_WT_PROFILE` line into the `ralph-config` block of `ralph-config.md` for you:
 
 ```
 RALPH_WT_PROFILE="Git Bash"
 ```
 
-**To find your profile name:** Open Windows Terminal, click the dropdown next to the `+` tab, and use the exact profile name (e.g. `Git Bash`, `PowerShell`).
+It must match a Windows Terminal profile name **exactly**. **To check yours:** open Windows Terminal, click the dropdown next to the `+` tab (e.g. `Git Bash`, `PowerShell`). If it doesn't match, edit the line — or delete it and Ralph falls back to running tasks inline in the same window.
 
-If Windows Terminal isn't set up, Ralph will fall back to running tasks inline in the same window.
+If a tab fails to start (wrong profile name, Git Bash not found), Ralph now detects that within ~15 seconds and falls back to inline mode for that task instead of hanging.
+
+**Optional — one-key launch:** bind `Ctrl+Shift+R` in Windows Terminal to start a sprint without typing. See the "Windows Terminal Hotkey Setup" section in [EXAMPLES.md](EXAMPLES.md).
+
+> **`gum` is optional.** It only adds a styled box to the "kit update available" notice. Without it that notice is plain text — nothing else changes. Install it any time with `winget install charmbracelet.gum`.
 
 ### Review it
 

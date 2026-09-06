@@ -8,7 +8,8 @@ Detailed walkthroughs for different project types and workflow patterns.
 
 ## Table of Contents
 
-- [iTerm2 Hotkey Setup](#iterm2-hotkey-setup)
+- [iTerm2 Hotkey Setup](#iterm2-hotkey-setup) (macOS)
+- [Windows Terminal Hotkey Setup](#windows-terminal-hotkey-setup) (Windows)
 - [Python/FastAPI Example](#pythonfastapi-example)
 - [Node.js/TypeScript Example](#nodejstypescript-example)
 - [Workflow Patterns](#workflow-patterns)
@@ -108,6 +109,91 @@ claude "/ralph-continuous"
 - **Zero friction** - Reduce mental overhead for iteration
 - **Faster cycles** - Complete sprint → review → start next in seconds
 - **Context preservation** - Stay in flow state
+
+---
+
+## Windows Terminal Hotkey Setup
+
+**Goal:** one keypress to start a sprint, the Windows equivalent of the iTerm2
+hotkey above. Requires **Windows Terminal** (Microsoft Store) — it's also what
+Ralph uses to open a tab per task.
+
+### Step-by-Step Setup
+
+**1. Open the settings JSON**
+
+Windows Terminal → `Ctrl+,` → **Open JSON file** (bottom-left).
+
+**2. Add an action**
+
+In the top-level `"actions"` array, add:
+
+```jsonc
+{
+  "command": { "action": "sendInput", "input": "claude \"/ralph-continuous\"\r" },
+  "id": "User.ralphContinuous"
+}
+```
+
+`\r` is the Enter keypress (the equivalent of iTerm's `\n`). `sendInput` types
+into the focused tab, so run it from a Git Bash tab sitting in your project.
+
+**3. Bind a key**
+
+In the top-level `"keybindings"` array, add:
+
+```jsonc
+{ "id": "User.ralphContinuous", "keys": "ctrl+shift+r" }
+```
+
+Save. Windows Terminal reloads settings immediately.
+
+### No-prompt variant (open a fresh Git Bash tab and run the script)
+
+`sendInput` needs a shell already at a prompt. To make the key work from any
+tab — opening its own Git Bash tab and running the orchestrator directly (which
+also shows Ralph's own project picker) — use `newTab` instead:
+
+```jsonc
+{
+  "command": {
+    "action": "newTab",
+    "profile": "Git Bash",
+    "commandline": "\"C:\\Program Files\\Git\\bin\\bash.exe\" -lc \"~/Documents/ralph-starter-kit/scripts/ralph-continuous.sh; exec bash -li\""
+  },
+  "id": "User.ralphContinuous"
+}
+```
+
+Adjust the path if your kit isn't at `~/Documents/ralph-starter-kit`.
+
+### Alternative Hotkeys (Optional)
+
+| Keys | `input` (sendInput) | Purpose |
+|------|---------------------|---------|
+| `ctrl+shift+r` | `claude "/ralph-continuous"\r` | Execute entire sprint |
+| `ctrl+shift+p` | `claude "/ralph-plan"\r` | Sprint planning |
+| `ctrl+shift+t` | `claude "/ralph"\r` | Single task |
+| `ctrl+shift+a` | `claude "/ralph-archive"\r` | Archive completed sprint |
+
+Give each its own `id` and a matching `keybindings` entry. Pick chords that
+don't collide with existing Windows Terminal bindings.
+
+### Profile name
+
+`newTab`'s `"profile"` and Ralph's `RALPH_WT_PROFILE` (in `ralph-config.md`)
+must both match a real profile name **exactly**. Find yours in the tab-dropdown
+(`⌄` next to `+`) — typically `Git Bash`. If you rename it, update both places.
+If tabs won't spawn, set `RALPH_WT_PROFILE` to match, or remove the line to let
+Ralph fall back to inline mode.
+
+### Testing Your Hotkey
+
+1. Open a **Git Bash** tab in Windows Terminal, `cd` to your project.
+2. Ensure `sprint_plan.md`, `ralph-config.md` (with a `ralph-config` block), and
+   the Ralph skills are in place.
+3. Press `Ctrl+Shift+R`. You should see the orchestrator start in the tab and a
+   new tab open for each task.
 
 ---
 

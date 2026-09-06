@@ -1,7 +1,8 @@
 #!/bin/bash
-# Install Ralph skills and agents as symlinks from the kit — kit is single source of truth.
-# Usage: ./install.sh
-# Run from any directory; script resolves kit location relative to itself.
+# Install Ralph skills and agents from the kit — kit is single source of truth.
+# Symlinks where the OS/filesystem supports them (macOS, or Windows with
+# Developer Mode); a plain copy otherwise (Git Bash without Developer Mode).
+# Usage: ./install.sh   — run from any directory; kit location resolves via $0.
 
 set -euo pipefail
 
@@ -14,16 +15,30 @@ CURSOR_SKILLS_DIR="${HOME}/.cursor/skills"
 SKILL_NAMES="ralph ralph-plan ralph-continuous ralph-archive"
 AGENT_NAMES="code-explorer build-validator playwright-runner deep-investigator"
 
-echo "Installing Ralph skills and agents as symlinks..."
+ANY_COPY=0
+
+# link_or_copy SRC DST — native symlink if possible, else recursive copy.
+link_or_copy() {
+  local src="$1" dst="$2"
+  rm -rf "$dst"
+  if ln -s "$src" "$dst" 2>/dev/null && [ -L "$dst" ]; then
+    return 0
+  fi
+  rm -rf "$dst"
+  cp -R "$src" "$dst"
+  ANY_COPY=1
+  return 0
+}
+
+echo "Installing Ralph skills and agents..."
 echo "Kit: ${SCRIPT_DIR}/.."
 echo ""
 
 mkdir -p "$CLAUDE_SKILLS_DIR"
 
 for skill in $SKILL_NAMES; do
-  rm -rf "${CLAUDE_SKILLS_DIR}/${skill}"
-  ln -s "${KIT_SKILLS_DIR}/${skill}" "${CLAUDE_SKILLS_DIR}/${skill}"
-  echo "✓ ~/.claude/skills/${skill} -> kit/skills/${skill}"
+  link_or_copy "${KIT_SKILLS_DIR}/${skill}" "${CLAUDE_SKILLS_DIR}/${skill}"
+  echo "✓ ~/.claude/skills/${skill}"
 done
 
 echo ""
@@ -32,9 +47,8 @@ echo ""
 if [ -d "$CURSOR_SKILLS_DIR" ]; then
   echo "Cursor skills directory found — installing there too..."
   for skill in $SKILL_NAMES; do
-    rm -rf "${CURSOR_SKILLS_DIR}/${skill}"
-    ln -s "${KIT_SKILLS_DIR}/${skill}" "${CURSOR_SKILLS_DIR}/${skill}"
-    echo "✓ ~/.cursor/skills/${skill} -> kit/skills/${skill}"
+    link_or_copy "${KIT_SKILLS_DIR}/${skill}" "${CURSOR_SKILLS_DIR}/${skill}"
+    echo "✓ ~/.cursor/skills/${skill}"
   done
   echo ""
 fi
@@ -42,25 +56,20 @@ fi
 mkdir -p "$CLAUDE_AGENTS_DIR"
 
 for agent in $AGENT_NAMES; do
-  rm -f "${CLAUDE_AGENTS_DIR}/${agent}.md"
-  ln -s "${KIT_AGENTS_DIR}/${agent}.md" "${CLAUDE_AGENTS_DIR}/${agent}.md"
-  echo "✓ ~/.claude/agents/${agent}.md -> kit/agents/${agent}.md"
+  link_or_copy "${KIT_AGENTS_DIR}/${agent}.md" "${CLAUDE_AGENTS_DIR}/${agent}.md"
+  echo "✓ ~/.claude/agents/${agent}.md"
 done
 
 echo ""
 echo "✓ Ralph installed successfully."
 echo ""
-echo "Edit kit/skills/<name>/SKILL.md or kit/agents/<name>.md — changes are live instantly, no reinstall needed."
-echo ""
-echo "This installer will self-destruct in 10 seconds..."
-echo "Press Ctrl+C to keep it."
-echo ""
-for i in 10 9 8 7 6 5 4 3 2 1; do
-  echo -ne "  Deleting in $i...\r"
-  sleep 1
-done
-echo ""
-echo "👋 Byeeeeeee. Enjoy Ralph!"
+if [ "$ANY_COPY" = "1" ]; then
+  echo "Note: this OS can't make the links natively, so skills/agents were COPIED."
+  echo "After you 'git pull' in the kit, re-run this installer to refresh them."
+else
+  echo "Edit kit/skills/<name>/SKILL.md or kit/agents/<name>.md — changes are live instantly."
+fi
+echo "Re-run this installer any time to repair or upgrade."
 echo ""
 cat << 'DRAGON'
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣴⣶⣾⣿⢿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -91,4 +100,3 @@ cat << 'DRAGON'
 ⠀⠀⠀⠀⠀⠉⠛⠷⢶⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠛⣿⣷⣶⣶⣤⣤⣤⣤⣄⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⣀⣀⣀⣠⣴⡿⠇
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠛⠛⠻⠿⠿⠷⠶⣶⣶⣶⣶⣦⣤⣤⣤⣤⣤⣶⣶⠿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 DRAGON
-rm -- "$0"

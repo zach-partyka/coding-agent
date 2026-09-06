@@ -9,12 +9,26 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # ─── Cross-platform helpers ─────────────────────────────────────────────────
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  sed_i() { sed -i '' "$@"; }
-  date_fmt() { date -r "$1" "$2"; }
+# Prefer the shared library; fall back to inline defs when ralph.sh was copied
+# into a project without ralph-portable.sh beside it.
+_RALPH_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_RALPH_SCRIPT_DIR/ralph-portable.sh" ]; then
+  # shellcheck source=ralph-portable.sh
+  . "$_RALPH_SCRIPT_DIR/ralph-portable.sh"
 else
-  sed_i() { sed -i "$@"; }
-  date_fmt() { date -d "@$1" "$2"; }
+  if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+    sed_i() { sed -i '' "$@"; }
+    date_fmt() { date -r "$1" "$2"; }
+  else
+    sed_i() { sed -i "$@"; }
+    date_fmt() { date -d "@$1" "$2"; }
+  fi
+  count_matches() {
+    local n
+    n=$(grep -cE "$1" "$2" 2>/dev/null || true)
+    n=${n%%[!0-9]*}
+    printf '%s\n' "${n:-0}"
+  }
 fi
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -80,7 +94,7 @@ cleanup() {
     echo "⚠️  Uncommitted changes detected - auto-saving..."
     git add -A
     git commit -m "WIP: Ralph auto-commit (session interrupted)" 2>/dev/null || echo "Nothing to commit"
-    git push origin "$RALPH_GIT_MAIN_BRANCH" 2>/dev/null || echo "Push failed - run 'git push origin ${RALPH_GIT_MAIN_BRANCH}' manually"
+    GIT_TERMINAL_PROMPT=0 git push origin "$RALPH_GIT_MAIN_BRANCH" 2>/dev/null || echo "Push failed - run 'git push origin ${RALPH_GIT_MAIN_BRANCH}' manually"
     echo "✓ Work saved. Run './ralph.sh' to continue."
   fi
 }
@@ -88,9 +102,9 @@ trap cleanup EXIT
 
 MODE="build"
 
-if [ "$1" == "--plan" ]; then
+if [ "${1:-}" == "--plan" ]; then
   MODE="plan"
-elif [ "$1" == "--continuous" ]; then
+elif [ "${1:-}" == "--continuous" ]; then
   MODE="continuous"
 fi
 
@@ -132,7 +146,7 @@ else
     haiku)      RALPH_MODEL_LABEL="Haiku 4.5" ;;
     *)          RALPH_MODEL_LABEL="Sonnet 4.6 (default)" ;;
   esac
-  if [ -n "$RALPH_MODEL" ]; then
+  if [ -n "${RALPH_MODEL:-}" ]; then
     echo "Model: $RALPH_MODEL_LABEL"
     echo ""
   fi
@@ -219,11 +233,12 @@ Ralph model: ${RALPH_MODEL_LABEL}"
     fi
 
     # 2. Count completed tasks
-    COMPLETED_COUNT=$(grep -cE "^\s*-\s*\[x\]\s*\*\*#[0-9]+\*\*" sprint_plan.md 2>/dev/null || echo 0)
+    COMPLETED_COUNT=$(count_matches "^\s*-\s*\[x\]\s*\*\*#[0-9]+\*\*" sprint_plan.md)
     if [ "$COMPLETED_COUNT" -eq 0 ]; then
       COMPLETED_LINE=$(grep -n "^## Completed" sprint_plan.md | head -1 | cut -d: -f1)
       if [ -n "$COMPLETED_LINE" ]; then
-        COMPLETED_COUNT=$(tail -n +$COMPLETED_LINE sprint_plan.md | grep -cE "^\s*-\s*\*\*#[0-9]+\*\*" 2>/dev/null || echo 0)
+        COMPLETED_COUNT=$(tail -n +$COMPLETED_LINE sprint_plan.md | grep -cE "^\s*-\s*\*\*#[0-9]+\*\*" 2>/dev/null || true)
+        COMPLETED_COUNT=${COMPLETED_COUNT%%[!0-9]*}; COMPLETED_COUNT=${COMPLETED_COUNT:-0}
       fi
     fi
     
@@ -249,9 +264,10 @@ Ralph model: ${RALPH_MODEL_LABEL}"
     fi
     
     # 6. Get total task count
-    TOTAL_TASKS=$(grep -cE "^\s*-\s*\[.\]\s*\*\*#[0-9]+\*\*" sprint_plan.md 2>/dev/null || echo 0)
+    TOTAL_TASKS=$(count_matches "^\s*-\s*\[.\]\s*\*\*#[0-9]+\*\*" sprint_plan.md)
     if [ "$TOTAL_TASKS" -eq 0 ]; then
-      TOTAL_TASKS=$(grep -cE "\*\*#[0-9]+\*\*" sprint_plan.md 2>/dev/null || echo "?")
+      TOTAL_TASKS=$(count_matches "\*\*#[0-9]+\*\*" sprint_plan.md)
+      [ "$TOTAL_TASKS" -eq 0 ] && TOTAL_TASKS="?"
     fi
     
     # 7. Update Sprint Performance Summary
@@ -285,7 +301,7 @@ Ralph model: ${RALPH_MODEL_LABEL}"
     echo "⚠️  WARNING: Commits not pushed to remote!"
     git log --oneline "origin/$RALPH_GIT_MAIN_BRANCH..HEAD"
     echo "Pushing now..."
-    git push origin "$RALPH_GIT_MAIN_BRANCH" || echo "Push failed - run manually"
+    GIT_TERMINAL_PROMPT=0 git push origin "$RALPH_GIT_MAIN_BRANCH" || echo "Push failed - run manually"
   else
     echo "✓ All changes committed and pushed"
   fi

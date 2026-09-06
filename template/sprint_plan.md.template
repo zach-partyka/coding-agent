@@ -10,26 +10,26 @@
 ### Critical Path
 <!-- Tasks that must complete in order. Ralph executes top-to-bottom. -->
 
-1. [#1] [Task name] - [Brief description]
-   - Acceptance: [What "done" looks like]
-   - Files: [Likely files to touch]
+- [ ] **#1** [Task name] - [Brief description]
+  - Acceptance: [What "done" looks like]
+  - Files: [Likely files to touch]
 
-2. [#2] [Task name] - depends on #1
-   - Acceptance: [What "done" looks like]
+- [ ] **#2** [Task name] - depends on #1
+  - Acceptance: [What "done" looks like]
 
 ### High Priority
 <!-- Independent tasks that can execute in any order. -->
 
-3. [#3] [Task name] - [Brief description]
-   - Acceptance: [What "done" looks like]
+- [ ] **#3** [Task name] - [Brief description]
+  - Acceptance: [What "done" looks like]
 
 ### Investigation Tasks
 <!-- Investigation-only: document findings, don't implement. Timebox 10-15 min. -->
 
-[INVESTIGATE] [#N] [Investigation name] - [What we need to learn]
-   - Questions to answer: [Specific questions]
-   - After investigation: Add implementation tasks to sprint
-   - Max time: 15 min
+- [ ] **#N** [INVESTIGATE] [Investigation name] - [What we need to learn]
+  - Questions to answer: [Specific questions]
+  - After investigation: Add implementation tasks to sprint
+  - Max time: 15 min
 
 ## Blocked
 <!-- Tasks move here when blocked. Include reason and what's needed to unblock. -->
@@ -54,7 +54,7 @@
 
 **Completed so far:** 0/[N] tasks
 **Total duration:** 0 min
-**Total cost:** $0.00
+**Total cost:** unavailable
 **Avg per task:** N/A
 
 **Cost comparison:** Engineer baseline ~$350 (loaded rate) for 7 hours equivalent work

@@ -2,6 +2,16 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+_RALPH_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_RALPH_SCRIPT_DIR/ralph-portable.sh" ]; then
+  # shellcheck source=ralph-portable.sh
+  . "$_RALPH_SCRIPT_DIR/ralph-portable.sh"
+else
+  echo "ERROR: ralph-portable.sh not found next to $(basename "${BASH_SOURCE[0]}")." >&2
+  echo "Re-run scripts/setup-project.sh to refresh the global Ralph install." >&2
+  exit 1
+fi
+
 # Ralph task wrapper - provides clean terminal UI + inline post-processing
 # Called by ralph-continuous.sh for each task
 #
@@ -9,9 +19,10 @@ IFS=$'\n\t'
 #   1. Write session-context.txt
 #   2. Claude runs INTERACTIVELY (user can redirect/interrupt)
 #   3. wait $CLAUDE_PID blocks until Claude fully exits
-#   4. If claude-done not touched, touch it (safety net)
-#   5. run_post_processing inline (SHELL_WILL_UPDATE replacement, sprint totals)
-#   6. touch task-done — orchestrator sees this and spawns next tab
+#   4. Non-zero agent exit: touch task-failed (not completion markers); exit with that status
+#   5. If claude-done not touched, touch it (safety net for successful exits only)
+#   6. run_post_processing inline (SHELL_WILL_UPDATE replacement, sprint totals)
+#   7. touch task-done — orchestrator sees this and spawns next tab
 
 if [ $# -lt 4 ]; then
   echo "ERROR: Not enough arguments (need at least 4, got $#)" >&2
@@ -50,7 +61,7 @@ PROJECT_NAME=$(basename "$PROJECT_DIR")
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  Ralph Task #${TASK_NUM}${NC}"
 echo -e "${BLUE}  Project: ${PROJECT_NAME}${NC}"
-echo -e "${BLUE}  Started: $(date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')${NC}"
+echo -e "${BLUE}  Started: $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -70,34 +81,41 @@ esac
 readonly RALPH_MODEL_LABEL
 
 # Generate a session ID to match against statusline stats file
-readonly SESSION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+readonly SESSION_ID="$(generate_uuid)"
 
 # Build Claude command - always pass explicit model so CLI doesn't use its own default (e.g. Opus)
 # When RALPH_MODEL is empty we want Sonnet 4.6, so pass "sonnet" explicitly
+# Interactive sessions have no model-turn cap. The orchestrator enforces
+# RALPH_TASK_TIMEOUT_MINUTES instead.
 CLAUDE_MODEL_FOR_CLI="${RALPH_MODEL:-sonnet}"
-CLAUDE_ARGS=("claude" "--dangerously-skip-permissions" "--max-turns" "50" "--session-id" "$SESSION_ID" "--model" "$CLAUDE_MODEL_FOR_CLI")
+CLAUDE_ARGS=("claude" "--dangerously-skip-permissions" "--session-id" "$SESSION_ID" "--model" "$CLAUDE_MODEL_FOR_CLI")
 echo -e "Model: ${GREEN}${RALPH_MODEL_LABEL}${NC}"
 echo -e "Session: ${SESSION_ID}"
 echo ""
 
+# On Windows `claude` is a .cmd/.ps1 shim reachable only if the npm global bin is
+# on the Git Bash PATH. Fail fast (and visibly) rather than deep inside the run.
+if ! command -v claude >/dev/null 2>&1; then
+  echo -e "${RED}'claude' is not on PATH in this shell.${NC}" >&2
+  echo "  Install Claude Code (npm i -g @anthropic-ai/claude-code) or add its bin dir to PATH." >&2
+  touch "$MARKER_DIR/task-failed" 2>/dev/null || true
+  exit 1
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# BACKGROUND WATCHER: monitors for claude-done, runs post-processing, touches task-done
-# This runs in a subshell so Claude can stay interactive while post-processing
-# happens automatically when Claude signals completion.
+# Post-processing (SHELL_WILL_UPDATE replacement + sprint totals) runs inline
+# after Claude exits — see run_post_processing below. Markers coordinate with
+# the orchestrator: this wrapper touches task-done / task-failed; the /ralph
+# skill touches task-<N>-claude-done and sprint-complete.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 readonly CLAUDE_DONE_MARKER="$MARKER_DIR/task-${TASK_NUM}-claude-done"
 readonly TASK_DONE_MARKER="$MARKER_DIR/task-done"
+readonly TASK_FAILED_MARKER="$MARKER_DIR/task-failed"
 readonly SUMMARY_FILE="$MARKER_DIR/task-${TASK_NUM}-summary.txt"
 
 # Remove stale markers and summary file from any previous run
-rm -f "$CLAUDE_DONE_MARKER" "$TASK_DONE_MARKER" "$SUMMARY_FILE"
-
-# Ensure cost string has leading zero (e.g. .25 -> 0.25)
-ensure_leading_zero() {
-  local v="$1"
-  [[ "$v" == .* ]] && echo "0$v" || echo "$v"
-}
+rm -f "$CLAUDE_DONE_MARKER" "$TASK_DONE_MARKER" "$TASK_FAILED_MARKER" "$SUMMARY_FILE"
 
 run_post_processing() {
   # This function runs post-processing (SHELL_WILL_UPDATE replacement + sprint totals)
@@ -109,6 +127,7 @@ run_post_processing() {
   echo "Post-processing started at $(date '+%Y-%m-%d %H:%M:%S')" >> "$debug_log"
 
   # Read cost + duration from statusline stats file (written by statusline-command.sh on each render)
+  # Missing cost stays unavailable ("-.--"), never "0.00".
   local cost_est="-.--"
   local cost_source="unavailable"
   local task_duration=1
@@ -116,19 +135,20 @@ run_post_processing() {
   local stats_file="$HOME/.claude/last-session-stats.json"
   if [ -f "$stats_file" ]; then
     local stats_session
-    stats_session=$(jq -r '.session_id // ""' "$stats_file" 2>/dev/null)
+    stats_session=$(json_str "$stats_file" session_id)
     if [ "$stats_session" = "$SESSION_ID" ]; then
       local cost_raw
-      cost_raw=$(jq -r '.cost_usd // empty' "$stats_file" 2>/dev/null)
-      if [ -n "$cost_raw" ]; then
-        cost_est=$(printf "%.2f" "$cost_raw" 2>/dev/null || echo "-.--")
-        cost_est=$(ensure_leading_zero "$cost_est")
+      cost_raw=$(json_str "$stats_file" cost_usd)
+      cost_est=$(format_cost_or_unavailable "$cost_raw")
+      if [ "$cost_est" != "-.--" ]; then
+        cost_source="statusline"
       fi
       local duration_ms
-      duration_ms=$(jq -r '.duration_ms // 0' "$stats_file" 2>/dev/null || echo "0")
+      duration_ms=$(json_str "$stats_file" duration_ms)
+      duration_ms=${duration_ms%%.*}
+      [[ "$duration_ms" =~ ^[0-9]+$ ]] || duration_ms=0
       task_duration=$(( (duration_ms + 30000) / 60000 ))
       [ "$task_duration" -lt 1 ] && task_duration=1
-      cost_source="statusline"
       echo "Stats from statusline: cost=\$${cost_est}, duration=${task_duration} min" >> "$debug_log"
     else
       echo "Session ID mismatch: expected $SESSION_ID, got $stats_session" >> "$debug_log"
@@ -147,7 +167,12 @@ run_post_processing() {
   # Output format:
   #   - **Performance:** 7 min | $1.47
   if [ -f "$sprint_plan" ]; then
-    local perf_line="  - **Performance:** ${task_duration} min | \$${cost_est}"
+    local perf_line
+    if [ "$cost_source" = "statusline" ] && [ "$cost_est" != "-.--" ]; then
+      perf_line="  - **Performance:** ${task_duration} min | \$${cost_est}"
+    else
+      perf_line="  - **Performance:** ${task_duration} min | unavailable"
+    fi
 
     # Write Python script to temp file (avoids quoting/interpolation issues)
     local py_script
@@ -196,7 +221,7 @@ while i < len(lines):
             else:
                 break
 
-        has_perf = any('**Performance:**' in s and '$' in s for s in sub_bullets)
+        has_perf = any('**Performance:**' in s and ('$' in s or 'unavailable' in s) for s in sub_bullets)
 
         if has_perf:
             # Already has final performance data — leave alone
@@ -237,21 +262,28 @@ with open(sprint_plan, 'w') as f:
     f.writelines(out)
 PYEOF
 
-    RALPH_PERF_BLOCK="$perf_line" RALPH_SPRINT_PLAN="$sprint_plan" python3 "$py_script" 2>/dev/null
+    local py_bin
+    if py_bin="$(ralph_python)"; then
+      RALPH_PERF_BLOCK="$perf_line" RALPH_SPRINT_PLAN="$sprint_plan" "$py_bin" "$py_script" 2>/dev/null \
+        && echo "✓ Performance lines updated in Completed section" >> "$debug_log" \
+        || echo "⚠ Performance-line rewrite failed ($py_bin)" >> "$debug_log"
+    else
+      echo "⚠ No Python interpreter found — skipped Performance-line rewrite" >> "$debug_log"
+    fi
     rm -f "$py_script"
-    echo "✓ Performance lines updated in Completed section" >> "$debug_log"
   fi
 
   # ── 2. Update sprint totals ──
   if [ -f "$sprint_plan" ]; then
     # Count completed tasks
     local completed_count
-    completed_count=$(grep -cE "^\s*-\s*\[x\]\s*\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo 0)
+    completed_count=$(count_matches "^\s*-\s*\[x\]\s*\*\*#[0-9]+\*\*" "$sprint_plan")
     if [ "$completed_count" -eq 0 ]; then
       local completed_line
       completed_line=$(grep -n "^## Completed" "$sprint_plan" 2>/dev/null | head -1 | cut -d: -f1 || true)
       if [ -n "$completed_line" ]; then
-        completed_count=$(tail -n +"$completed_line" "$sprint_plan" | grep -cE "^\s*-\s*\*\*#[0-9]+\*\*" 2>/dev/null || echo 0)
+        completed_count=$(tail -n +"$completed_line" "$sprint_plan" | grep -cE "^\s*-\s*\*\*#[0-9]+\*\*" 2>/dev/null || true)
+        completed_count=${completed_count%%[!0-9]*}; completed_count=${completed_count:-0}
       fi
     fi
 
@@ -261,32 +293,37 @@ PYEOF
       | grep -oE "[0-9]+" | awk '{sum+=$1} END {print sum+0}'; } || true)
     total_duration="${total_duration:-0}"
 
-    # Sum costs from **Performance:** lines only (not Main/Sub sub-bullets).
-    # Extract the first dollar amount from each Performance line (always the total).
-    # Handles: "3 min | $3.00", "3 min | Opus | $2.77 (...)", "3 min | Opus | ~$0.25 est"
-    local total_cost
-    total_cost=$({ grep '\*\*Performance:\*\*' "$sprint_plan" 2>/dev/null \
-      | sed -n 's/.*\$\([0-9]*\.[0-9]*\).*/\1/p' \
-      | awk '{sum+=$1} END {printf "%.2f", sum+0}'; } || true)
-    total_cost="${total_cost:-0.00}"
+    # Sum costs from **Performance:** lines only. Missing cost is never $0.00.
+    local total_cost="unavailable"
+    local cost_available=0
+    if grep '\*\*Performance:\*\*' "$sprint_plan" 2>/dev/null | grep -qE '\$[0-9]'; then
+      total_cost=$({ grep '\*\*Performance:\*\*' "$sprint_plan" 2>/dev/null \
+        | grep -vE 'unavailable|-\.--' \
+        | sed -n 's/.*\$\([0-9]*\.[0-9]*\).*/\1/p' \
+        | awk '{sum+=$1} END {printf "%.2f", sum+0}'; } || true)
+      cost_available=1
+    fi
 
-    # Averages
+    # Averages — skip dollar aggregation when cost is unavailable
     local avg_duration=0
-    local avg_cost="0.00"
+    local avg_cost="unavailable"
     if [ "$completed_count" -gt 0 ] && [ "$total_duration" -gt 0 ]; then
       avg_duration=$(( (total_duration + completed_count - 1) / completed_count ))
-      if command -v bc &> /dev/null; then
-        avg_cost=$(echo "scale=2; $total_cost / $completed_count" | bc)
-      else
-        avg_cost=$(awk "BEGIN {printf \"%.2f\", $total_cost / $completed_count}")
+      if [ "$cost_available" -eq 1 ]; then
+        if command -v bc &> /dev/null; then
+          avg_cost=$(echo "scale=2; $total_cost / $completed_count" | bc)
+        else
+          avg_cost=$(awk "BEGIN {printf \"%.2f\", $total_cost / $completed_count}")
+        fi
       fi
     fi
 
     # Total task count
     local total_tasks
-    total_tasks=$(grep -cE "^\s*-\s*\[.\]\s*\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo 0)
+    total_tasks=$(count_matches "^\s*-\s*\[.\]\s*\*\*#[0-9]+\*\*" "$sprint_plan")
     if [ "$total_tasks" -eq 0 ]; then
-      total_tasks=$(grep -cE "\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo "?")
+      total_tasks=$(count_matches "\*\*#[0-9]+\*\*" "$sprint_plan")
+      [ "$total_tasks" -eq 0 ] && total_tasks="?"
     fi
 
     # Collect unique sub-model families from this sprint's Performance blocks
@@ -336,13 +373,21 @@ PYEOF
         /\*\*Total cost:\*\*/ {
           match($0, /^[-* ]*/)
           prefix = substr($0, RSTART, RLENGTH)
-          $0 = prefix "**Total cost:** $" total_cost
+          if (total_cost == "unavailable") {
+            $0 = prefix "**Total cost:** unavailable"
+          } else {
+            $0 = prefix "**Total cost:** $" total_cost
+          }
           print; next
         }
         /\*\*Avg per task:\*\*/ {
           match($0, /^[-* ]*/)
           prefix = substr($0, RSTART, RLENGTH)
-          $0 = prefix "**Avg per task:** " avg_duration " min / $" avg_cost
+          if (avg_cost == "unavailable") {
+            $0 = prefix "**Avg per task:** " avg_duration " min / unavailable"
+          } else {
+            $0 = prefix "**Avg per task:** " avg_duration " min / $" avg_cost
+          }
           print; next
         }
         /\*\*Main model:\*\*/ {
@@ -408,20 +453,46 @@ echo "Session context written to $SESSION_CONTEXT_FILE" >&3
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LAUNCH CLAUDE (interactive; user can redirect or interrupt)
-# Background with wait preserves interactive behavior while capturing PID.
-# wait $CLAUDE_PID blocks until Claude fully exits — stats file is written by then.
+# macOS: background + `wait` so stderr can be tee'd live to the log.
+# Windows/Linux: process substitution + backgrounding is fragile under MSYS
+# (limited job control, flaky /dev/fd), so run in the foreground without the
+# live tee — the log is best-effort there.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CLAUDE_EXIT=0
 CLAUDE_LOG="$MARKER_DIR/task-${TASK_NUM}-claude-output.log"
 readonly PROMPT="/ralph"
 
-# Capture stderr to log file while still displaying it live (maintains full visibility)
-"${CLAUDE_ARGS[@]}" "$PROMPT" 2> >(tee "$CLAUDE_LOG" >&2) &
-CLAUDE_PID=$!
-wait $CLAUDE_PID || CLAUDE_EXIT=$?
+if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+  "${CLAUDE_ARGS[@]}" "$PROMPT" 2> >(tee "$CLAUDE_LOG" >&2) &
+  CLAUDE_PID=$!
+  wait $CLAUDE_PID || CLAUDE_EXIT=$?
+else
+  : > "$CLAUDE_LOG"
+  "${CLAUDE_ARGS[@]}" "$PROMPT" || CLAUDE_EXIT=$?
+fi
 
 echo "Claude exited with code: $CLAUDE_EXIT" >&3
+
+# Non-zero agent exit must not look complete — orchestrator waits on these markers.
+if [ "$CLAUDE_EXIT" -ne 0 ]; then
+  echo "Non-zero agent exit — not creating completion markers" >&3
+  touch "$TASK_FAILED_MARKER"
+  echo "task-failed marker created at $(date '+%Y-%m-%d %H:%M:%S')" >&3
+  TASK_END_TS=$(date +%s)
+  echo ""
+  echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
+  echo -e "${RED}  Task Failed (exit ${CLAUDE_EXIT})${NC}"
+  echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
+  echo -e "  Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
+  echo -e "  Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
+  echo -e "  Model:    ${RALPH_MODEL_LABEL}"
+  echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
+  echo ""
+  echo "Wrapper failed at $(date '+%Y-%m-%d %H:%M:%S')" >&3
+  exec 3>&-
+  exit "$CLAUDE_EXIT"
+fi
 
 # Safety net: if Claude exited without touching claude-done, create it now
 if [ ! -f "$CLAUDE_DONE_MARKER" ]; then
@@ -455,14 +526,14 @@ echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}  Task Complete${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "  Started:  $(date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
-echo -e "  Ended:    $(date -r "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
+echo -e "  Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
+echo -e "  Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
 echo -e "  Duration: ${TASK_DURATION} min"
 echo -e "  Model:    ${RALPH_MODEL_LABEL}"
 if [ "$DISPLAY_COST_SOURCE" = "statusline" ]; then
   echo -e "  Cost:     \$${DISPLAY_COST} (Claude Code)"
 else
-  echo -e "  Cost:     \$${DISPLAY_COST} (stats unavailable)"
+  echo -e "  Cost:     ${DISPLAY_COST} (stats unavailable)"
 fi
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
