@@ -51,16 +51,7 @@ echo ""
 echo "✓ Ralph installed successfully."
 echo ""
 echo "Edit kit/skills/<name>/SKILL.md or kit/agents/<name>.md — changes are live instantly, no reinstall needed."
-echo ""
-echo "This installer will self-destruct in 10 seconds..."
-echo "Press Ctrl+C to keep it."
-echo ""
-for i in 10 9 8 7 6 5 4 3 2 1; do
-  echo -ne "  Deleting in $i...\r"
-  sleep 1
-done
-echo ""
-echo "👋 Byeeeeeee. Enjoy Ralph!"
+echo "Re-run this installer any time to repair or upgrade the skill/agent links."
 echo ""
 cat << 'DRAGON'
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣴⣶⣾⣿⢿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -91,4 +82,3 @@ cat << 'DRAGON'
 ⠀⠀⠀⠀⠀⠉⠛⠷⢶⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠛⣿⣷⣶⣶⣤⣤⣤⣤⣄⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⣀⣀⣀⣠⣴⡿⠇
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠛⠛⠻⠿⠿⠷⠶⣶⣶⣶⣶⣦⣤⣤⣤⣤⣤⣶⣶⠿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 DRAGON
-rm -- "$0"

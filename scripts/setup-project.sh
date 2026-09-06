@@ -323,7 +323,7 @@ cp "$STARTER_KIT_DIR/scripts/ralph.sh" "$PROJECT_DIR/ralph.sh"
 chmod +x "$PROJECT_DIR/ralph.sh"
 echo "✓ Created ralph.sh"
 
-# Install ralph-continuous.sh to global location (one-time)
+# Install the global Ralph runtime (refreshed on every run so it can't go stale)
 if [ -n "$CUSTOM_INSTALL_PATH" ]; then
   GLOBAL_RALPH_DIR="$CUSTOM_INSTALL_PATH"
 else
@@ -332,15 +332,13 @@ fi
 
 GLOBAL_RALPH_SCRIPT="$GLOBAL_RALPH_DIR/ralph-continuous.sh"
 
-if [ ! -f "$GLOBAL_RALPH_SCRIPT" ]; then
-  echo "Installing ralph-continuous.sh globally..."
-  mkdir -p "$GLOBAL_RALPH_DIR"
-  cp "$STARTER_KIT_DIR/scripts/ralph-continuous.sh" "$GLOBAL_RALPH_SCRIPT"
-  chmod +x "$GLOBAL_RALPH_SCRIPT"
-  echo "✓ Installed to $GLOBAL_RALPH_SCRIPT"
-else
-  echo "✓ ralph-continuous.sh already installed at $GLOBAL_RALPH_SCRIPT"
-fi
+echo "Installing Ralph runtime to $GLOBAL_RALPH_DIR ..."
+mkdir -p "$GLOBAL_RALPH_DIR"
+cp "$STARTER_KIT_DIR/scripts/ralph-continuous.sh"   "$GLOBAL_RALPH_DIR/ralph-continuous.sh"
+cp "$STARTER_KIT_DIR/scripts/ralph-task-wrapper.sh" "$GLOBAL_RALPH_DIR/ralph-task-wrapper.sh"
+cp "$STARTER_KIT_DIR/scripts/ralph-portable.sh"     "$GLOBAL_RALPH_DIR/ralph-portable.sh"
+chmod +x "$GLOBAL_RALPH_DIR/ralph-continuous.sh" "$GLOBAL_RALPH_DIR/ralph-task-wrapper.sh"
+echo "✓ Installed ralph-continuous.sh, ralph-task-wrapper.sh, ralph-portable.sh"
 
 # Install Ralph skills and agents to Claude Code (symlinks — kit is single source of truth)
 echo "Installing Ralph skills and agents..."

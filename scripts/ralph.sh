@@ -9,7 +9,13 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # ─── Cross-platform helpers ─────────────────────────────────────────────────
-if [[ "$OSTYPE" == "darwin"* ]]; then
+# Prefer the shared library; fall back to inline defs when ralph.sh was copied
+# into a project without ralph-portable.sh beside it.
+_RALPH_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_RALPH_SCRIPT_DIR/ralph-portable.sh" ]; then
+  # shellcheck source=ralph-portable.sh
+  . "$_RALPH_SCRIPT_DIR/ralph-portable.sh"
+elif [[ "${OSTYPE:-}" == "darwin"* ]]; then
   sed_i() { sed -i '' "$@"; }
   date_fmt() { date -r "$1" "$2"; }
 else
@@ -88,9 +94,9 @@ trap cleanup EXIT
 
 MODE="build"
 
-if [ "$1" == "--plan" ]; then
+if [ "${1:-}" == "--plan" ]; then
   MODE="plan"
-elif [ "$1" == "--continuous" ]; then
+elif [ "${1:-}" == "--continuous" ]; then
   MODE="continuous"
 fi
 
@@ -132,7 +138,7 @@ else
     haiku)      RALPH_MODEL_LABEL="Haiku 4.5" ;;
     *)          RALPH_MODEL_LABEL="Sonnet 4.6 (default)" ;;
   esac
-  if [ -n "$RALPH_MODEL" ]; then
+  if [ -n "${RALPH_MODEL:-}" ]; then
     echo "Model: $RALPH_MODEL_LABEL"
     echo ""
   fi

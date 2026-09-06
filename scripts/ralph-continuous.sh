@@ -13,6 +13,16 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+_RALPH_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$_RALPH_SCRIPT_DIR/ralph-portable.sh" ]; then
+  # shellcheck source=ralph-portable.sh
+  . "$_RALPH_SCRIPT_DIR/ralph-portable.sh"
+else
+  echo "ERROR: ralph-portable.sh not found next to $(basename "${BASH_SOURCE[0]}")." >&2
+  echo "Re-run scripts/setup-project.sh to refresh the global Ralph install." >&2
+  exit 1
+fi
+
 # Configuration
 RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
 RALPH_MODEL=""  # Model selection (set via prompt or RALPH_MODEL env var)
@@ -186,7 +196,7 @@ detect_terminal() {
 prepare_task_env() {
   local task_num=$1
   TASK_START_TS=$(date +%s)
-  date -r "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
+  date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S' > "$MARKER_DIR/task-${task_num}-start"
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   WRAPPER="$SCRIPT_DIR/ralph-task-wrapper.sh"
 }
@@ -309,29 +319,16 @@ spawn_inline() {
 wait_for_completion() {
   local task_num=$1
   local marker_file="$MARKER_DIR/task-done"
-  local timeout=3600  # 60 minutes
-  local elapsed=0
+  local fail_marker="$MARKER_DIR/task-failed"
+  # Historic default is 60 minutes. Project config may set RALPH_TASK_TIMEOUT_MINUTES.
+  local timeout_min="${RALPH_TASK_TIMEOUT_MINUTES:-60}"
+  local timeout=$((timeout_min * 60))
 
-  # Remove old marker before starting
-  rm -f "$marker_file"
+  # Remove old markers before starting
+  rm -f "$marker_file" "$fail_marker"
 
   echo -n "Waiting for task #$task_num to complete "
-
-  while [ ! -f "$marker_file" ] && [ $elapsed -lt $timeout ]; do
-    sleep 3
-    elapsed=$((elapsed + 3))
-    echo -n "."
-  done
-
-  echo ""
-
-  if [ -f "$marker_file" ]; then
-    rm -f "$marker_file"
-    # Tab stays open for manual review - user closes when ready
-    return 0
-  else
-    return 1
-  fi
+  wait_for_marker "$marker_file" "$timeout" "$fail_marker"
 }
 
 # Header
@@ -572,22 +569,24 @@ while true; do
 
   log "Starting task #$TASK_COUNT"
 
+  # Capture wait/spawn status without tripping set -e, so timeout cleanup runs.
+  EXIT_CODE=0
   case $TERMINAL_TYPE in
     "iterm")
       spawn_in_iterm $TASK_COUNT
-      wait_for_completion $TASK_COUNT
+      wait_for_completion $TASK_COUNT || EXIT_CODE=$?
       ;;
     "terminal")
       spawn_in_terminal $TASK_COUNT
-      wait_for_completion $TASK_COUNT
+      wait_for_completion $TASK_COUNT || EXIT_CODE=$?
       ;;
     "windows-terminal")
       if spawn_in_windows_terminal $TASK_COUNT; then
-        wait_for_completion $TASK_COUNT
+        wait_for_completion $TASK_COUNT || EXIT_CODE=$?
       else
         # Fallback to inline if tab spawning failed
         echo "ℹ️  Running in inline mode - tasks will execute sequentially in this window."
-        spawn_inline $TASK_COUNT
+        spawn_inline $TASK_COUNT || EXIT_CODE=$?
       fi
       ;;
     *)
@@ -595,11 +594,9 @@ while true; do
       echo "   (Supported: iTerm2, Terminal.app, VS Code, Windows Terminal)"
       echo "   Running in inline mode - tasks will execute sequentially in this window."
       echo ""
-      spawn_inline $TASK_COUNT
+      spawn_inline $TASK_COUNT || EXIT_CODE=$?
       ;;
   esac
-
-  EXIT_CODE=$?
 
   if [ $EXIT_CODE -ne 0 ]; then
     echo ""
@@ -607,6 +604,9 @@ while true; do
     echo -e "${RED}  Task #$TASK_COUNT failed or timed out${NC}"
     echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
     log "Error: Task #$TASK_COUNT failed after $TASK_COUNT iterations"
+    # Do not leave a stale sprint-complete marker for the next run
+    rm -f "$MARKER_DIR/sprint-complete" "$MARKER_DIR/task-done" "$MARKER_DIR/task-failed"
+    rm -rf "$MARKER_DIR"
     break
   fi
 
