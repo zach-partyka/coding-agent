@@ -5,6 +5,23 @@ no technical background required.
 
 ---
 
+## 2026-09-06
+
+- **Ralph runs on Windows now, not just macOS.** Same commands, same tab-per-task
+  experience — using **Git Bash + Windows Terminal**. `setup-project.sh` no longer
+  tries to install Homebrew on Windows, `/ralph-continuous` no longer aborts before
+  it starts, and cost/metrics no longer depend on tools Git for Windows doesn't ship
+  (`jq`, `python3`). One shared codebase — nothing about the macOS experience changes.
+- **A failed task tab is caught fast.** If Windows Terminal can't open a task tab
+  (wrong `RALPH_WT_PROFILE` name, Git Bash not found), Ralph now notices within ~15
+  seconds and runs that task inline instead of hanging for the full task timeout.
+- **One-key launch on Windows.** Bind `Ctrl+Shift+R` in Windows Terminal — see the
+  "Windows Terminal Hotkey Setup" section in `docs/EXAMPLES.md`. `setup-project.sh`
+  writes the `RALPH_WT_PROFILE` line into `ralph-config.md` for you.
+- **`gum` is now optional everywhere.** It only styles the update notice. Setup
+  installs it via `winget` on Windows / Homebrew on macOS when available, and just
+  carries on (plain-text notice) when it can't.
+
 ## 2026-03-13
 
 - **RALPH.md is now shared across all projects.** Instead of copying a separate RALPH.md into each project, setup now creates a link. Changes to RALPH.md in the kit (via `git pull`) instantly apply to every project on your machine. Learnings written back during sprints are already in the kit, ready to share.
