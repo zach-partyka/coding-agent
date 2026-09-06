@@ -93,10 +93,20 @@ echo -e "Model: ${GREEN}${RALPH_MODEL_LABEL}${NC}"
 echo -e "Session: ${SESSION_ID}"
 echo ""
 
+# On Windows `claude` is a .cmd/.ps1 shim reachable only if the npm global bin is
+# on the Git Bash PATH. Fail fast (and visibly) rather than deep inside the run.
+if ! command -v claude >/dev/null 2>&1; then
+  echo -e "${RED}'claude' is not on PATH in this shell.${NC}" >&2
+  echo "  Install Claude Code (npm i -g @anthropic-ai/claude-code) or add its bin dir to PATH." >&2
+  touch "$MARKER_DIR/task-failed" 2>/dev/null || true
+  exit 1
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# BACKGROUND WATCHER: monitors for claude-done, runs post-processing, touches task-done
-# This runs in a subshell so Claude can stay interactive while post-processing
-# happens automatically when Claude signals completion.
+# Post-processing (SHELL_WILL_UPDATE replacement + sprint totals) runs inline
+# after Claude exits — see run_post_processing below. Markers coordinate with
+# the orchestrator: this wrapper touches task-done / task-failed; the /ralph
+# skill touches task-<N>-claude-done and sprint-complete.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 readonly CLAUDE_DONE_MARKER="$MARKER_DIR/task-${TASK_NUM}-claude-done"
@@ -125,16 +135,18 @@ run_post_processing() {
   local stats_file="$HOME/.claude/last-session-stats.json"
   if [ -f "$stats_file" ]; then
     local stats_session
-    stats_session=$(jq -r '.session_id // ""' "$stats_file" 2>/dev/null)
+    stats_session=$(json_str "$stats_file" session_id)
     if [ "$stats_session" = "$SESSION_ID" ]; then
       local cost_raw
-      cost_raw=$(jq -r '.cost_usd // empty' "$stats_file" 2>/dev/null)
+      cost_raw=$(json_str "$stats_file" cost_usd)
       cost_est=$(format_cost_or_unavailable "$cost_raw")
       if [ "$cost_est" != "-.--" ]; then
         cost_source="statusline"
       fi
       local duration_ms
-      duration_ms=$(jq -r '.duration_ms // 0' "$stats_file" 2>/dev/null || echo "0")
+      duration_ms=$(json_str "$stats_file" duration_ms)
+      duration_ms=${duration_ms%%.*}
+      [[ "$duration_ms" =~ ^[0-9]+$ ]] || duration_ms=0
       task_duration=$(( (duration_ms + 30000) / 60000 ))
       [ "$task_duration" -lt 1 ] && task_duration=1
       echo "Stats from statusline: cost=\$${cost_est}, duration=${task_duration} min" >> "$debug_log"
@@ -250,21 +262,28 @@ with open(sprint_plan, 'w') as f:
     f.writelines(out)
 PYEOF
 
-    RALPH_PERF_BLOCK="$perf_line" RALPH_SPRINT_PLAN="$sprint_plan" python3 "$py_script" 2>/dev/null
+    local py_bin
+    if py_bin="$(ralph_python)"; then
+      RALPH_PERF_BLOCK="$perf_line" RALPH_SPRINT_PLAN="$sprint_plan" "$py_bin" "$py_script" 2>/dev/null \
+        && echo "✓ Performance lines updated in Completed section" >> "$debug_log" \
+        || echo "⚠ Performance-line rewrite failed ($py_bin)" >> "$debug_log"
+    else
+      echo "⚠ No Python interpreter found — skipped Performance-line rewrite" >> "$debug_log"
+    fi
     rm -f "$py_script"
-    echo "✓ Performance lines updated in Completed section" >> "$debug_log"
   fi
 
   # ── 2. Update sprint totals ──
   if [ -f "$sprint_plan" ]; then
     # Count completed tasks
     local completed_count
-    completed_count=$(grep -cE "^\s*-\s*\[x\]\s*\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo 0)
+    completed_count=$(count_matches "^\s*-\s*\[x\]\s*\*\*#[0-9]+\*\*" "$sprint_plan")
     if [ "$completed_count" -eq 0 ]; then
       local completed_line
       completed_line=$(grep -n "^## Completed" "$sprint_plan" 2>/dev/null | head -1 | cut -d: -f1 || true)
       if [ -n "$completed_line" ]; then
-        completed_count=$(tail -n +"$completed_line" "$sprint_plan" | grep -cE "^\s*-\s*\*\*#[0-9]+\*\*" 2>/dev/null || echo 0)
+        completed_count=$(tail -n +"$completed_line" "$sprint_plan" | grep -cE "^\s*-\s*\*\*#[0-9]+\*\*" 2>/dev/null || true)
+        completed_count=${completed_count%%[!0-9]*}; completed_count=${completed_count:-0}
       fi
     fi
 
@@ -301,9 +320,10 @@ PYEOF
 
     # Total task count
     local total_tasks
-    total_tasks=$(grep -cE "^\s*-\s*\[.\]\s*\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo 0)
+    total_tasks=$(count_matches "^\s*-\s*\[.\]\s*\*\*#[0-9]+\*\*" "$sprint_plan")
     if [ "$total_tasks" -eq 0 ]; then
-      total_tasks=$(grep -cE "\*\*#[0-9]+\*\*" "$sprint_plan" 2>/dev/null || echo "?")
+      total_tasks=$(count_matches "\*\*#[0-9]+\*\*" "$sprint_plan")
+      [ "$total_tasks" -eq 0 ] && total_tasks="?"
     fi
 
     # Collect unique sub-model families from this sprint's Performance blocks
@@ -433,18 +453,24 @@ echo "Session context written to $SESSION_CONTEXT_FILE" >&3
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LAUNCH CLAUDE (interactive; user can redirect or interrupt)
-# Background with wait preserves interactive behavior while capturing PID.
-# wait $CLAUDE_PID blocks until Claude fully exits — stats file is written by then.
+# macOS: background + `wait` so stderr can be tee'd live to the log.
+# Windows/Linux: process substitution + backgrounding is fragile under MSYS
+# (limited job control, flaky /dev/fd), so run in the foreground without the
+# live tee — the log is best-effort there.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CLAUDE_EXIT=0
 CLAUDE_LOG="$MARKER_DIR/task-${TASK_NUM}-claude-output.log"
 readonly PROMPT="/ralph"
 
-# Capture stderr to log file while still displaying it live (maintains full visibility)
-"${CLAUDE_ARGS[@]}" "$PROMPT" 2> >(tee "$CLAUDE_LOG" >&2) &
-CLAUDE_PID=$!
-wait $CLAUDE_PID || CLAUDE_EXIT=$?
+if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+  "${CLAUDE_ARGS[@]}" "$PROMPT" 2> >(tee "$CLAUDE_LOG" >&2) &
+  CLAUDE_PID=$!
+  wait $CLAUDE_PID || CLAUDE_EXIT=$?
+else
+  : > "$CLAUDE_LOG"
+  "${CLAUDE_ARGS[@]}" "$PROMPT" || CLAUDE_EXIT=$?
+fi
 
 echo "Claude exited with code: $CLAUDE_EXIT" >&3
 

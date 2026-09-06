@@ -75,6 +75,57 @@ generate_uuid() {
   _uuid_normalize "$u"
 }
 
+# ─── Python interpreter discovery ──────────────────────────────────────────
+# Print the name of a working Python interpreter (python3, python, or the
+# Windows `py` launcher), or return 1 if none is usable. Rejects the Windows
+# Store App-Execution-Alias stub (on PATH, but runs nothing).
+# Caller:  "$(ralph_python)" script.py args...
+ralph_python() {
+  local p
+  for p in python3 python py; do
+    command -v "$p" >/dev/null 2>&1 || continue
+    if [ "$("$p" -c 'print(1)' 2>/dev/null)" = "1" ]; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ─── Minimal JSON reader ───────────────────────────────────────────────────
+# json_str FILE KEY  — print the top-level string/number value for KEY.
+# Uses jq when present, else Python, else prints nothing. Never aborts.
+json_str() {
+  local file="${1:-}" key="${2:-}" py
+  { [ -n "$file" ] && [ -n "$key" ] && [ -f "$file" ]; } || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --arg k "$key" '.[$k] // empty' "$file" 2>/dev/null || true
+    return 0
+  fi
+  if py="$(ralph_python)"; then
+    "$py" -c 'import json,sys
+try:
+    d = json.load(open(sys.argv[1]))
+    v = d.get(sys.argv[2])
+    print("" if v is None else v)
+except Exception:
+    pass' "$file" "$key" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# ─── Line counting ────────────────────────────────────────────────────────
+# count_matches PATTERN FILE  — number of lines in FILE matching extended-regex
+# PATTERN. Prints 0 on no match, missing file, or error. Avoids the
+# `x=$(grep -cE ... || echo 0)` pitfall where `grep -c` prints "0" AND exits 1,
+# so `|| echo 0` appends a second value and `[ "$x" -eq 0 ]` then blows up.
+count_matches() {
+  local n
+  n=$(grep -cE "$1" "$2" 2>/dev/null || true)
+  n=${n%%[!0-9]*}
+  printf '%s\n' "${n:-0}"
+}
+
 # ─── Cost formatting ───────────────────────────────────────────────────────
 # Print a 2-decimal amount. Return the literal "-.--" for empty / null /
 # non-numeric input so a missing cost can never be rendered as "0.00".
