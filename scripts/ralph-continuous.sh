@@ -57,7 +57,9 @@ if [ -z "$PROJECT_ARG" ]; then
   while IFS= read -r sprint_file; do
     project_dir=$(dirname "$sprint_file")
     RALPH_PROJECTS+=("$project_dir")
-  done < <(find "$HOME/Documents" -name "sprint_plan.md" -type f 2>/dev/null | grep -v "/sprints/" | head -n 10)
+  done < <({ find "$HOME/Documents" -name "sprint_plan.md" -type f 2>/dev/null
+             [ -d "$HOME/OneDrive/Documents" ] && find "$HOME/OneDrive/Documents" -name "sprint_plan.md" -type f 2>/dev/null
+           } | grep -v "/sprints/" | sort -u | head -n 10)
 
   if [ ${#RALPH_PROJECTS[@]} -gt 0 ]; then
     echo "Found Ralph projects:"
@@ -178,7 +180,10 @@ detect_terminal() {
     echo "iterm"
   elif [ "${TERM_PROGRAM:-}" = "Apple_Terminal" ]; then
     echo "terminal"
-  elif [ "${TERM_PROGRAM:-}" = "vscode" ]; then
+  elif [ "${TERM_PROGRAM:-}" = "vscode" ] && [[ "${OSTYPE:-}" == "darwin"* ]]; then
+    # VS Code sets TERM_PROGRAM=vscode on every OS; only the macOS integrated
+    # terminal can hand off to Terminal.app/iTerm. Off macOS, fall through to the
+    # Windows Terminal / inline detection below.
     echo "vscode"
   elif command -v wt.exe &> /dev/null && [ -n "${WT_SESSION:-}" ]; then
     echo "windows-terminal"
@@ -207,7 +212,7 @@ spawn_in_terminal() {
   local task_num=$1
   prepare_task_env "$task_num"
 
-  local launcher="/tmp/ralph-task-${task_num}.sh"
+  local launcher="${TMPDIR:-/tmp}/ralph-task-${task_num}.sh"
   cat > "$launcher" << LAUNCHER
 #!/bin/bash
 rm -f "$launcher"
@@ -229,7 +234,7 @@ spawn_in_iterm() {
   local task_num=$1
   prepare_task_env "$task_num"
 
-  local launcher="/tmp/ralph-task-${task_num}.sh"
+  local launcher="${TMPDIR:-/tmp}/ralph-task-${task_num}.sh"
   cat > "$launcher" <<EOF
 #!/bin/bash
 set -euo pipefail
@@ -273,39 +278,47 @@ spawn_in_windows_terminal() {
   local task_num=$1
   prepare_task_env "$task_num"
 
-  local launcher="/tmp/ralph-task-${task_num}.sh"
+  local launcher="${TMPDIR:-/tmp}/ralph-task-${task_num}.sh"
+  local spawned_marker="$MARKER_DIR/task-${task_num}-spawned"
+  rm -f "$spawned_marker"
   cat > "$launcher" << LAUNCHER
 #!/bin/bash
+touch "$spawned_marker"
 rm -f "$launcher"
 exec "$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
 LAUNCHER
   chmod +x "$launcher"
 
-  if wt.exe new-tab --profile "$RALPH_WT_PROFILE" bash -c "$launcher" 2>/dev/null; then
-    return 0
-  else
-    echo "⚠️  Failed to spawn Windows Terminal tab"
-    echo "   Profile '$RALPH_WT_PROFILE' not found in Windows Terminal"
-    echo "   Set RALPH_WT_PROFILE env var if using different profile name"
-    echo "   Falling back to inline mode..."
-    return 1
+  # wt.exe is a Win32 process: it resolves `bash` against the *new tab's* PATH,
+  # not this shell's, and `bash` is often not on the persistent Windows PATH.
+  # Pass an explicit interpreter, converted to a Windows path for wt.exe.
+  local bash_exe="" cand
+  for cand in "$(command -v bash 2>/dev/null)" \
+              "/c/Program Files/Git/bin/bash.exe" \
+              "/c/Program Files/Git/usr/bin/bash.exe"; do
+    if [ -n "$cand" ] && [ -x "$cand" ]; then bash_exe="$cand"; break; fi
+  done
+  [ -z "$bash_exe" ] && bash_exe="bash"
+  if command -v cygpath &> /dev/null; then
+    bash_exe="$(cygpath -w "$bash_exe" 2>/dev/null || echo "$bash_exe")"
   fi
-}
 
-# Spawn with forced PTY (for VS Code or other non-native terminals)
-# Uses `script` command to allocate a pseudo-terminal
-spawn_with_pty() {
-  local task_num=$1
-  local dir_name=$(basename "$PROJECT_DIR")
+  # wt.exe returns 0 even when the in-tab command never starts, so its exit code
+  # can't gate the fallback. The launcher touches "$spawned_marker" as its first
+  # action; if that never appears, treat the spawn as failed so the caller drops
+  # to inline mode instead of blocking on wait_for_completion for the full
+  # task timeout.
+  MSYS_NO_PATHCONV=1 wt.exe new-tab -w 0 --profile "$RALPH_WT_PROFILE" \
+    "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
 
-  # script -q /dev/null forces PTY allocation
-  # This makes Claude think it has a real terminal, enabling interactive UI
-  # The echo "2" auto-accepts the bypass permissions prompt
-  echo "2" | script -q /dev/null claude --dangerously-skip-permissions "/ralph
+  if wait_for_marker "$spawned_marker" 15; then
+    return 0
+  fi
 
-📁 $dir_name
-
-Implement ONE task from sprint_plan.md, then signal completion."
+  echo "⚠️  Windows Terminal tab did not start."
+  echo "   Check that a profile named '$RALPH_WT_PROFILE' exists (set RALPH_WT_PROFILE"
+  echo "   to match yours) and that Git Bash is installed. Falling back to inline mode..."
+  return 1
 }
 
 # Spawn inline (true fallback - no TTY benefits)
