@@ -245,17 +245,17 @@ ui_confirm() {
   case "$a" in [Yy]|[Yy][Ee][Ss]) return 0 ;; *) return 1 ;; esac
 }
 
-# ui_pager FILE — show a file in a pager (gum pager mangles wide content, so use
-# less/$PAGER, then cat).
+# ui_pager FILE — scroll through a file. Markdown gets rendered with `gum format`
+# (its own pager mangles wide content, so pipe to less). q returns to the caller.
 ui_pager() {
-  local f="$1"
+  local f="$1" g
   [ -f "$f" ] || return 0
-  if command -v less >/dev/null 2>&1; then
-    less -R -- "$f"
-  elif [ -n "${PAGER:-}" ]; then
-    "$PAGER" "$f"
+  local pager="cat"
+  command -v less >/dev/null 2>&1 && pager="less -R"
+  if [ "${RALPH_UI:-}" != "plain" ] && g="$(_ui_gum 2>/dev/null)"; then
+    "$g" format --theme dark < "$f" | $pager
   else
-    cat -- "$f"
+    $pager < "$f"
   fi
 }
 

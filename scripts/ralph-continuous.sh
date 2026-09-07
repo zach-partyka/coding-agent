@@ -385,19 +385,19 @@ check_for_updates() {
   ui_banner info "Ralph update available" \
     "$behind update$([ "$behind" -gt 1 ] && echo s) waiting on origin/main"
 
-  local UPD="Update now" UPD_LOG="Show what changed, then update" SKIP="Skip for now"
+  local UPD="Update now" VIEW="View what changed" SKIP="Skip for now"
   local pick
-  pick="$(ui_choose "Update Ralph?" "$UPD" "$UPD_LOG" "$SKIP")" || pick="$SKIP"
-
-  case "$pick" in
-    "$SKIP")
-      echo "Skipped. Update later with:  git -C \"$kit_dir\" pull"
-      return
-      ;;
-    "$UPD_LOG")
-      ui_pager "$kit_dir/CHANGELOG.md"
-      ;;
-  esac
+  while :; do
+    pick="$(ui_choose "Update Ralph?" "$UPD" "$VIEW" "$SKIP")" || pick="$SKIP"
+    case "$pick" in
+      "$VIEW") ui_pager "$kit_dir/CHANGELOG.md" ;;   # q returns here
+      "$SKIP")
+        echo "Skipped. Update later with:  git -C \"$kit_dir\" pull"
+        return
+        ;;
+      *) break ;;                                     # "Update now"
+    esac
+  done
 
   if ( cd "$kit_dir" && git pull --quiet ); then
     # git pull just rewrote this very script (and ralph-portable.sh). bash reads
