@@ -126,6 +126,114 @@ count_matches() {
   printf '%s\n' "${n:-0}"
 }
 
+# ─── Interactive UI ───────────────────────────────────────────────────────
+# gum-styled menus/banners when `gum` is on PATH and stdout is a TTY; a plain
+# numbered-prompt / ASCII-box fallback otherwise. Set RALPH_UI=plain to force
+# the fallback (useful for logs / CI / screenshots without gum).
+_ui_have_gum() {
+  [ "${RALPH_UI:-}" != "plain" ] && command -v gum >/dev/null 2>&1 && [ -t 1 ]
+}
+
+# ui_banner COLOR TITLE [LINE...] — boxed banner. COLOR is info|ok|warn|err.
+ui_banner() {
+  local color="$1"; shift
+  local title="$1"; shift
+  local gc ac
+  case "$color" in
+    ok)   gc=42;  ac='1;32' ;;
+    warn) gc=214; ac='1;33' ;;
+    err)  gc=203; ac='1;31' ;;
+    *)    gc=39;  ac='1;34' ;;
+  esac
+  if _ui_have_gum; then
+    gum style --border rounded --border-foreground "$gc" --foreground "$gc" \
+      --padding "0 2" --margin "1 0" "$title" "$@"
+    return
+  fi
+  local w=59 fill l
+  fill=$(printf '%*s' "$w" '' | tr ' ' '=')
+  printf '\n\033[%sm╔%s╗\033[0m\n' "$ac" "$fill"
+  printf '\033[%sm║ %-*s ║\033[0m\n' "$ac" "$((w - 2))" "$title"
+  for l in "$@"; do printf '\033[%sm║ %-*s ║\033[0m\n' "$ac" "$((w - 2))" "$l"; done
+  printf '\033[%sm╚%s╝\033[0m\n\n' "$ac" "$fill"
+}
+
+# ui_choose PROMPT OPT... — print the chosen OPT to stdout. Returns 1 on abort
+# (Esc / Ctrl-C / EOF / invalid).
+ui_choose() {
+  local prompt="$1"; shift
+  # gum reads the terminal via /dev/tty, so it works even when stdin isn't a
+  # TTY (e.g. the script was launched with stdin closed/redirected).
+  if _ui_have_gum; then
+    gum choose --header "$prompt" "$@" || return 1
+    return 0
+  fi
+  # Prompt + list to stderr so a $(...) caller still shows them; read from stdin
+  # (the caller's command substitution inherits it).
+  printf '\n\033[1;34m%s\033[0m\n' "$prompt" >&2
+  local i=1 opt
+  for opt in "$@"; do printf '  \033[0;32m%d\033[0m) %s\n' "$i" "$opt" >&2; i=$((i + 1)); done
+  local sel
+  read -r -p "Select [1-$#]: " sel || return 1
+  case "$sel" in ''|*[!0-9]*) return 1 ;; esac
+  { [ "$sel" -ge 1 ] && [ "$sel" -le "$#" ]; } || return 1
+  printf '%s\n' "${!sel}"
+}
+
+# ui_input PROMPT [PLACEHOLDER] — read one line of text from the user.
+ui_input() {
+  local prompt="$1" ph="${2:-}"
+  if _ui_have_gum; then
+    gum input --header "$prompt" --placeholder "$ph"
+    return
+  fi
+  local val
+  read -r -p "$prompt " val || return 1
+  printf '%s\n' "$val"
+}
+
+# ─── Model choices ───────────────────────────────────────────────────────
+# Single source of truth for the models Ralph offers. One row per model:
+#   alias | menu label | sprint_plan.md label | rough cost per minute (USD)
+# The alias is what `claude --model` accepts; aliases auto-resolve to the
+# current model version, so this list does not need touching when versions
+# change. (There is no CLI that reports the /model list.)
+ralph_models() {
+  cat <<'MODELS'
+sonnet|Sonnet     -  balanced, best for most tasks|Sonnet|0.03
+opus|Opus       -  hardest reasoning and debugging|Opus|0.05
+opusplan|Opus Plan  -  Opus plans, Sonnet executes|Opus Plan|0.05
+haiku|Haiku      -  fastest and cheapest|Haiku|0.01
+MODELS
+}
+
+# Menu labels (field 2), newline-separated — feed straight to ui_choose.
+ralph_model_menu_labels() { ralph_models | cut -d'|' -f2; }
+
+# alias whose menu label == $1 (empty if none — caller should default).
+ralph_model_alias_for() {
+  local a l s c
+  ralph_models | while IFS='|' read -r a l s c; do
+    [ "$l" = "$1" ] && printf '%s\n' "$a"
+  done
+}
+
+# sprint_plan.md label for alias $1 (default: Sonnet).
+ralph_model_sprint_label() {
+  local a l s c
+  { ralph_models | while IFS='|' read -r a l s c; do
+      [ "$a" = "$1" ] && printf '%s\n' "$s"
+    done; } | grep . || printf 'Sonnet\n'
+}
+
+# rough $/min for alias $1 (default: 0.03).
+ralph_model_cost_per_min() {
+  local a l s c
+  { ralph_models | while IFS='|' read -r a l s c; do
+      [ "$a" = "$1" ] && printf '%s\n' "$c"
+    done; } | grep . || printf '0.03\n'
+}
+
 # ─── Cost formatting ───────────────────────────────────────────────────────
 # Print a 2-decimal amount. Return the literal "-.--" for empty / null /
 # non-numeric input so a missing cost can never be rendered as "0.00".
