@@ -200,10 +200,9 @@ ui_input() {
 # change. (There is no CLI that reports the /model list.)
 ralph_models() {
   cat <<'MODELS'
-sonnet|Sonnet     -  balanced, best for most tasks|Sonnet|0.03
-opus|Opus       -  hardest reasoning and debugging|Opus|0.05
-opusplan|Opus Plan  -  Opus plans, Sonnet executes|Opus Plan|0.05
-haiku|Haiku      -  fastest and cheapest|Haiku|0.01
+sonnet|Sonnet  -  balanced, best for most tasks|Sonnet|0.03
+opus|Opus    -  hardest reasoning and debugging|Opus|0.05
+haiku|Haiku   -  fastest and cheapest|Haiku|0.01
 MODELS
 }
 
