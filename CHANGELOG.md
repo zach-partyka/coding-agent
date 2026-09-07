@@ -5,6 +5,24 @@ no technical background required.
 
 ---
 
+## 2026-09-07
+
+- **Fixed: Ralph could quit right after you picked a model.** On Mac and Windows,
+  choosing Sonnet or Opus stopped the script before the sprint started. Choosing
+  Haiku worked. Now all three work.
+- **The main tab now shows a task board.** The tab you start Ralph in lists every
+  task with its status — done, running, or waiting — plus the sprint name, the
+  model, and how long the sprint has been going. It updates as tasks finish.
+  Before, this tab was just a scrolling log. Mac and Windows.
+- **Ralph offers to plan when there's nothing to run.** If `sprint_plan.md` is
+  missing, or still the blank template, Ralph asks if you want to run
+  `/ralph-plan` instead of starting an empty sprint. Mac and Windows.
+- **Windows: `/ralph-plan` opens in its own tab.** Choosing to plan now opens a
+  "Ralph: Plan" tab, the same way tasks do. Before, it took over the main tab.
+- **Windows: fixed task tabs opening in a separate window.** On Windows Terminal
+  1.24 and newer, new tabs opened detached from the main window and the task
+  never started. Tabs now open in the same window and run as expected.
+
 ## 2026-09-06
 
 - **Ralph runs on Windows.** Same commands and the same tab-per-task flow as on a
