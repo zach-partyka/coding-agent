@@ -250,12 +250,17 @@ ui_confirm() {
 ui_pager() {
   local f="$1" g
   [ -f "$f" ] || return 0
-  local pager="cat"
-  command -v less >/dev/null 2>&1 && pager="less -R"
-  if [ "${RALPH_UI:-}" != "plain" ] && g="$(_ui_gum 2>/dev/null)"; then
-    "$g" format --theme dark < "$f" | $pager
+  local -a pg
+  if command -v less >/dev/null 2>&1; then
+    pg=(less -R --quit-if-one-screen
+        -P ' ↑ ↓ scroll   ·   q to go back ')
   else
-    $pager < "$f"
+    pg=(cat)
+  fi
+  if [ "${RALPH_UI:-}" != "plain" ] && g="$(_ui_gum 2>/dev/null)"; then
+    "$g" format --theme dark < "$f" | "${pg[@]}"
+  else
+    "${pg[@]}" < "$f"
   fi
 }
 
