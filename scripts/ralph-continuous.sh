@@ -319,57 +319,8 @@ end tell
 EOF
 }
 
-# Spawn Claude in a new Windows Terminal tab
-spawn_in_windows_terminal() {
-  local task_num=$1
-  prepare_task_env "$task_num"
-
-  local launcher="${TMPDIR:-/tmp}/ralph-task-${task_num}.sh"
-  local spawned_marker="$MARKER_DIR/task-${task_num}-spawned"
-  rm -f "$spawned_marker"
-  cat > "$launcher" << LAUNCHER
-#!/bin/bash
-touch "$spawned_marker"
-rm -f "$launcher"
-exec "$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
-LAUNCHER
-  chmod +x "$launcher"
-
-  # wt.exe is a Win32 process: it resolves `bash` against the *new tab's* PATH,
-  # not this shell's, and `bash` is often not on the persistent Windows PATH.
-  # Pass an explicit interpreter, converted to a Windows path for wt.exe.
-  local bash_exe="" cand
-  for cand in "$(command -v bash 2>/dev/null)" \
-              "/c/Program Files/Git/bin/bash.exe" \
-              "/c/Program Files/Git/usr/bin/bash.exe"; do
-    if [ -n "$cand" ] && [ -x "$cand" ]; then bash_exe="$cand"; break; fi
-  done
-  [ -z "$bash_exe" ] && bash_exe="bash"
-  if command -v cygpath &> /dev/null; then
-    bash_exe="$(cygpath -w "$bash_exe" 2>/dev/null || echo "$bash_exe")"
-  fi
-
-  # wt.exe returns 0 even when the in-tab command never starts, so its exit code
-  # can't gate the fallback. The launcher touches "$spawned_marker" as its first
-  # action; if that never appears, treat the spawn as failed so the caller drops
-  # to inline mode instead of blocking on wait_for_completion for the full
-  # task timeout.
-  MSYS_NO_PATHCONV=1 wt.exe new-tab -w 0 --profile "$RALPH_WT_PROFILE" \
-    --title "Ralph: Task ${task_num}" \
-    "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
-
-  if wait_for_marker "$spawned_marker" 15; then
-    return 0
-  fi
-
-  echo "⚠️  Windows Terminal tab did not start."
-  echo "   Check that a profile named '$RALPH_WT_PROFILE' exists (set RALPH_WT_PROFILE"
-  echo "   to match yours) and that Git Bash is installed. Falling back to inline mode..."
-  return 1
-}
-
 # A Git Bash interpreter as a Windows path (wt.exe resolves `bash` against the
-# new tab's PATH, where it often isn't).
+# NEW tab's PATH, where it often isn't).
 _resolve_wt_bash() {
   local cand
   for cand in "$(command -v bash 2>/dev/null)" \
@@ -383,29 +334,69 @@ _resolve_wt_bash() {
   printf 'bash\n'
 }
 
+# _wt_new_tab TITLE SPAWNED_MARKER LAUNCHER_PATH
+# Open a new tab IN THE CURRENT Windows Terminal window that runs LAUNCHER_PATH,
+# then wait up to 15s for SPAWNED_MARKER. 0 = tab started, 1 = it didn't.
+#   `-w 0` (== current window) is a GLOBAL wt option: it MUST come before the
+#   `new-tab` subcommand. After it, wt drops `-w` and tries to exec `0`.
+_wt_new_tab() {
+  local title="$1" spawned="$2" launcher="$3"
+  rm -f "$spawned"
+  local bash_exe; bash_exe="$(_resolve_wt_bash)"
+  MSYS_NO_PATHCONV=1 wt.exe -w 0 new-tab --profile "$RALPH_WT_PROFILE" \
+    --title "$title" "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
+  wait_for_marker "$spawned" 15
+}
+
+# Spawn Claude in a new Windows Terminal tab
+spawn_in_windows_terminal() {
+  local task_num=$1
+  prepare_task_env "$task_num"
+
+  local launcher="${TMPDIR:-/tmp}/ralph-task-${task_num}.sh"
+  local spawned_marker="$MARKER_DIR/task-${task_num}-spawned"
+  cat > "$launcher" << LAUNCHER
+#!/bin/bash
+touch "$spawned_marker"
+rm -f "$launcher"
+exec "$WRAPPER" "$task_num" "$PROJECT_DIR" "$TASK_START_TS" "$MARKER_DIR" "$RALPH_MODEL"
+LAUNCHER
+  chmod +x "$launcher"
+
+  # wt.exe returns 0 even when the in-tab command never starts, so its exit code
+  # can't gate the fallback. The launcher touches "$spawned_marker" first; if
+  # that never appears, treat the spawn as failed so the caller drops to inline
+  # mode instead of blocking on wait_for_completion for the full task timeout.
+  if _wt_new_tab "Ralph: Task ${task_num}" "$spawned_marker" "$launcher"; then
+    return 0
+  fi
+
+  echo "⚠️  Windows Terminal tab did not start."
+  echo "   Check that a profile named '$RALPH_WT_PROFILE' exists (set RALPH_WT_PROFILE"
+  echo "   to match yours) and that Git Bash is installed. Falling back to inline mode..."
+  return 1
+}
+
 # Open /ralph-plan in its own Windows Terminal tab titled "Ralph: Plan".
 # Returns 0 if the tab started, 1 otherwise.
 spawn_plan_tab() {
   local launcher="${TMPDIR:-/tmp}/ralph-plan.sh"
   local spawned="${TMPDIR:-/tmp}/ralph-plan-spawned"
-  rm -f "$spawned"
   cat > "$launcher" <<LAUNCHER
 #!/bin/bash
 touch "$spawned"
 rm -f "$launcher"
 cd "$PROJECT_DIR" || exit 1
+printf '\033]0;Ralph: Plan\007'
 claude --dangerously-skip-permissions --model "$RALPH_MODEL" "/ralph-plan
 
 Project directory: $PROJECT_DIR"
-echo ""
-echo "Plan written. Close this tab, then re-run Ralph to start the sprint."
+echo
+echo "  Plan written. Close this tab, then start Ralph again to run the sprint."
 exec bash -li
 LAUNCHER
   chmod +x "$launcher"
-  local bash_exe; bash_exe="$(_resolve_wt_bash)"
-  MSYS_NO_PATHCONV=1 wt.exe new-tab -w 0 --profile "$RALPH_WT_PROFILE" \
-    --title "Ralph: Plan" "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
-  wait_for_marker "$spawned" 15
+  _wt_new_tab "Ralph: Plan" "$spawned" "$launcher"
 }
 
 # Spawn inline (true fallback - no TTY benefits)
