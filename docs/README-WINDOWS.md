@@ -133,7 +133,8 @@ claude "/ralph-continuous"
 
 At the start Ralph asks two quick questions in this tab — which model to use, and
 (if the kit has updates) whether to pull them — so answer those before stepping
-away. After that it runs on its own.
+away. After that it runs on its own. The pickers are arrow-key menus when `gum`
+is installed; set `RALPH_UI=plain` if you'd rather have plain numbered prompts.
 
 Ralph opens a new terminal tab for each task and works through them one at a time. You'll see it:
 

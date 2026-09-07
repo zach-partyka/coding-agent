@@ -5,6 +5,20 @@ no technical background required.
 
 ---
 
+## 2026-09-06 (later)
+
+- **Scrollable menus.** The project picker and model picker in `/ralph-continuous`
+  are now arrow-key menus (`gum choose`) instead of "type a number". Task banners are
+  styled boxes. When `gum` isn't installed you get the old numbered prompts; set
+  `RALPH_UI=plain` to force them.
+- **One place to edit the model list.** The models Ralph offers (and their
+  `sprint_plan.md` labels) are defined once in `scripts/ralph-portable.sh`
+  (`ralph_models`) instead of three separate copies that had drifted out of date. The
+  menu now uses version-free aliases (`sonnet`, `opus`, `opusplan`, `haiku`) that
+  always resolve to the current model.
+- **Quieter start.** The startup log lines between the banner and the first menu now
+  go to `ralph-continuous.log` only.
+
 ## 2026-09-06
 
 - **Ralph runs on Windows now, not just macOS.** Same commands, same tab-per-task
