@@ -27,6 +27,9 @@ fi
 RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
 RALPH_MODEL=""  # Model selection (set via prompt or RALPH_MODEL env var)
 
+# Keep the original argv so check_for_updates can re-exec cleanly after a pull.
+RALPH_ARGV=("$@")
+
 # Parse args in one pass: --inline flag and project directory
 FORCE_INLINE=false
 PROJECT_ARG=""
@@ -397,7 +400,11 @@ check_for_updates() {
   esac
 
   if ( cd "$kit_dir" && git pull --quiet ); then
-    ui_banner ok "Ralph updated" "Now on the latest version."
+    # git pull just rewrote this very script (and ralph-portable.sh). bash reads
+    # a script by byte offset, so continuing would run garbage — re-exec the
+    # fresh copy. The re-run sees behind=0 and skips this block.
+    ui_banner ok "Ralph updated" "Restarting on the new version..."
+    exec bash "$0" ${RALPH_ARGV[@]+"${RALPH_ARGV[@]}"}
   else
     ui_banner err "Update failed" "Run 'git -C \"$kit_dir\" pull' by hand."
   fi
