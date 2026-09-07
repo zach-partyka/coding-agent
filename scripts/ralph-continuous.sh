@@ -148,6 +148,58 @@ check_tasks_remain() {
 get_sprint_display_info() {
   PROJECT_NAME=$(basename "$PROJECT_DIR")
   SPRINT_NAME=$(grep -E "^#\s*Sprint\s+[0-9]+" "$FIX_PLAN" 2>/dev/null | head -1 | sed 's/^#\s*//' || echo "Current Sprint")
+  [ -n "$SPRINT_NAME" ] || SPRINT_NAME="Current Sprint"
+}
+
+# ── Overview screen ─────────────────────────────────────────────────────────
+# The orchestrator tab is a live status board, not a scrolling log: every task
+# in sprint_plan.md with its state. Re-rendered whenever that state changes.
+#   render_overview [running|idle] [FOOTER...]
+# In "running" mode the first open task is marked in-flight (that's the one the
+# task tab picks up).
+render_overview() {
+  local mode="${1:-idle}"; shift || true
+  get_sprint_display_info
+
+  local done_n=0 total_n=0 marked=0
+  local -a rows
+  local line box id name glyph colour
+  while IFS= read -r line; do
+    box=$(printf '%s' "$line" | sed -n 's/^[[:space:]]*-[[:space:]]*\[\(.\)\].*/\1/p')
+    id=$(printf '%s' "$line" | sed -n 's/.*\*\*#\([0-9][0-9]*\)\*\*.*/\1/p')
+    name=$(printf '%s' "$line" \
+      | sed -e 's/^[[:space:]]*-[[:space:]]*\[.\][[:space:]]*//' \
+            -e 's/\*\*#[0-9][0-9]*\*\*[[:space:]]*//' -e 's/^[-–—[:space:]]*//')
+    [ ${#name} -gt 58 ] && name="${name:0:55}..."
+    total_n=$((total_n + 1))
+    case "$box" in
+      x|X) glyph="[x]"; colour="38;5;42";  done_n=$((done_n + 1)) ;;
+      *)
+        if [ "$mode" = running ] && [ "$marked" -eq 0 ]; then
+          glyph="[>]"; colour="1;38;5;${RALPH_UI_ACCENT}"; marked=1
+        else
+          glyph="[ ]"; colour="38;5;244"
+        fi
+        ;;
+    esac
+    rows+=("$(printf '\033[%sm  %s  #%-3s %s\033[0m' "$colour" "$glyph" "${id:-?}" "$name")")
+  done < <(grep -E '^[[:space:]]*-[[:space:]]*\[[ xX]\][[:space:]]*\*\*#[0-9]+\*\*' "$FIX_PLAN" 2>/dev/null || true)
+
+  printf '\033[2J\033[3J\033[H'
+  ui_banner info "Ralph  ·  ${SPRINT_NAME}" \
+    "${PROJECT_NAME}   ·   $done_n of $total_n done   ·   $(ralph_model_sprint_label "$RALPH_MODEL")"
+
+  if [ "$total_n" -eq 0 ]; then
+    printf '  (no numbered tasks found in sprint_plan.md)\n'
+  else
+    printf '%s\n' "${rows[@]}"
+  fi
+
+  local elapsed_min=$(( ($(date +%s) - ${START_TIME:-$(date +%s)}) / 60 ))
+  printf '\n\033[38;5;244m  %s min elapsed   ·   log: %s\033[0m\n' \
+    "$elapsed_min" "$(basename "$LOG_FILE")"
+  [ $# -gt 0 ] && printf '\n%s\n' "$@"
+  return 0
 }
 
 check_blocked() {
@@ -316,6 +368,46 @@ LAUNCHER
   return 1
 }
 
+# A Git Bash interpreter as a Windows path (wt.exe resolves `bash` against the
+# new tab's PATH, where it often isn't).
+_resolve_wt_bash() {
+  local cand
+  for cand in "$(command -v bash 2>/dev/null)" \
+              "/c/Program Files/Git/bin/bash.exe" \
+              "/c/Program Files/Git/usr/bin/bash.exe"; do
+    if [ -n "$cand" ] && [ -x "$cand" ]; then
+      command -v cygpath >/dev/null 2>&1 && cygpath -w "$cand" 2>/dev/null || printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+  printf 'bash\n'
+}
+
+# Open /ralph-plan in its own Windows Terminal tab titled "Ralph: Plan".
+# Returns 0 if the tab started, 1 otherwise.
+spawn_plan_tab() {
+  local launcher="${TMPDIR:-/tmp}/ralph-plan.sh"
+  local spawned="${TMPDIR:-/tmp}/ralph-plan-spawned"
+  rm -f "$spawned"
+  cat > "$launcher" <<LAUNCHER
+#!/bin/bash
+touch "$spawned"
+rm -f "$launcher"
+cd "$PROJECT_DIR" || exit 1
+claude --dangerously-skip-permissions --model "$RALPH_MODEL" "/ralph-plan
+
+Project directory: $PROJECT_DIR"
+echo ""
+echo "Plan written. Close this tab, then re-run Ralph to start the sprint."
+exec bash -li
+LAUNCHER
+  chmod +x "$launcher"
+  local bash_exe; bash_exe="$(_resolve_wt_bash)"
+  MSYS_NO_PATHCONV=1 wt.exe new-tab -w 0 --profile "$RALPH_WT_PROFILE" \
+    --title "Ralph: Plan" "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
+  wait_for_marker "$spawned" 15
+}
+
 # Spawn inline (true fallback - no TTY benefits)
 spawn_inline() {
   local task_num=$1
@@ -335,7 +427,8 @@ wait_for_completion() {
   # Remove old markers before starting
   rm -f "$marker_file" "$fail_marker"
 
-  echo -n "Waiting for task #$task_num to complete "
+  render_overview running "$(printf '\033[1;38;5;%sm  Run %s in progress — watch the "Ralph: Task %s" tab\033[0m\n\033[38;5;244m  Ctrl+C there to stop it.\033[0m' \
+    "$RALPH_UI_ACCENT" "$task_num" "$task_num")"
   wait_for_marker "$marker_file" "$timeout" "$fail_marker"
 }
 
@@ -478,11 +571,19 @@ if ! plan_ready; then
     ui_banner warn "No sprint plan yet" "sprint_plan.md doesn't exist in this project."
   fi
   if ui_confirm "Create one now with /ralph-plan?"; then
-    claude --dangerously-skip-permissions --model "$RALPH_MODEL" "/ralph-plan
+    if [ "$TERMINAL_TYPE" = "windows-terminal" ] && spawn_plan_tab; then
+      ui_banner info "Planning in a new tab" \
+        "See the 'Ralph: Plan' tab." \
+        "When the plan is written, start Ralph again."
+    else
+      # No tab support (or the spawn failed) — plan right here.
+      cd "$PROJECT_DIR" || exit 1
+      claude --dangerously-skip-permissions --model "$RALPH_MODEL" "/ralph-plan
 
 Project directory: $PROJECT_DIR"
-    echo ""
-    echo "Plan done. Re-run this to start the sprint:  $0"
+      echo ""
+      echo "Plan written. Start Ralph again to run the sprint."
+    fi
   else
     echo "Run  claude \"/ralph-plan\"  first, then start again."
   fi
@@ -506,80 +607,50 @@ while true; do
   if check_blocked; then
     # Tasks are blocked - check if ALL remaining tasks are blocked
     if ! check_tasks_remain; then
-      get_sprint_display_info
-      echo ""
-      echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-      echo -e "${YELLOW}  Sprint Blocked: ${SPRINT_NAME}${NC}"
-      echo -e "\033[2m  ${PROJECT_NAME}${NC}"
-      echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-      echo ""
-      echo "All remaining tasks are blocked."
-      echo ""
-      echo -e "${BLUE}View details:${NC}"
-      echo "  file://$FIX_PLAN"
-      echo ""
-      echo -e "${BLUE}Next steps:${NC}"
-      echo "  1. Fix blocking issues (environment, dependencies, etc.)"
-      echo "  2. Run ralph-continuous.sh again to complete blocked tasks"
-      echo ""
-      log "Sprint blocked: $SPRINT_NAME - all remaining tasks blocked after $TASK_COUNT iterations"
+      render_overview idle
+      ui_banner warn "Sprint blocked" \
+        "Every remaining task is blocked." \
+        "1. Clear the blockers (environment, dependencies, ...)" \
+        "2. Start Ralph again to finish them" \
+        "Details: $FIX_PLAN"
+      logf "Sprint blocked: $SPRINT_NAME - all remaining tasks blocked after $TASK_COUNT iterations"
       break
     fi
   fi
   
   if ! check_tasks_remain; then
-    get_sprint_display_info
-    echo ""
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  All tasks complete: ${SPRINT_NAME}${NC}"
-    echo -e "\033[2m  ${PROJECT_NAME}${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-    log "All tasks complete: $SPRINT_NAME after $TASK_COUNT iterations"
-
-    echo ""
-    echo -e "${BLUE}View sprint details:${NC}"
-    echo "  file://$FIX_PLAN"
-    echo ""
-    echo -e "${BLUE}Next steps:${NC}"
-    echo "  - Run /ralph-archive to archive this sprint"
-    echo "  - Run /ralph-plan to plan the next sprint"
-    echo ""
-
+    render_overview idle
+    ui_banner ok "Sprint complete" \
+      "Next: /ralph-archive to file it, /ralph-plan for the next one." \
+      "Details: $FIX_PLAN"
+    logf "All tasks complete: $SPRINT_NAME after $TASK_COUNT iterations"
     break
   fi
 
   if check_blocked; then
-    echo ""
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Task blocked${NC}"
-    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-    log "Task blocked after $TASK_COUNT iterations"
-    
+    logf "Task blocked after $TASK_COUNT iterations"
+
     # Check if there are any unblocked tasks remaining
     if ! check_tasks_remain; then
-      echo "All remaining tasks are blocked or complete."
-      echo "Sprint paused - resolve blocked tasks and run Ralph again."
-      echo ""
-      log "All tasks blocked or complete - stopping"
+      render_overview idle
+      ui_banner warn "Sprint paused" \
+        "Every remaining task is blocked or done." \
+        "Clear the blockers, then start Ralph again."
+      logf "All tasks blocked or complete - stopping"
       break
     else
-      echo "Blocked task detected - skipping to next unblocked task"
-      echo ""
-      log "Continuing with next unblocked task"
+      render_overview idle "$(printf '\033[38;5;214m  A task is blocked — skipping to the next unblocked one.\033[0m')"
+      logf "Continuing with next unblocked task"
       sleep 2
     fi
   fi
 
   TASK_COUNT=$((TASK_COUNT + 1))
 
-  echo ""
-  echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-  echo -e "${BLUE}  Task #$TASK_COUNT - Opening new terminal tab${NC}"
-  echo -e "${BLUE}───────────────────────────────────────────────────────────${NC}"
-  echo ""
+  render_overview running "$(printf '\033[1;38;5;%sm  Run %s starting...\033[0m' \
+    "$RALPH_UI_ACCENT" "$TASK_COUNT")"
 
-  log "Starting task #$TASK_COUNT"
+  logf "Starting task #$TASK_COUNT"
 
   # Capture wait/spawn status without tripping set -e, so timeout cleanup runs.
   EXIT_CODE=0
@@ -611,22 +682,21 @@ while true; do
   esac
 
   if [ $EXIT_CODE -ne 0 ]; then
-    echo ""
-    echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${RED}  Task #$TASK_COUNT failed or timed out${NC}"
-    echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
-    log "Error: Task #$TASK_COUNT failed after $TASK_COUNT iterations"
+    render_overview idle
+    ui_banner err "Run $TASK_COUNT failed or timed out" \
+      "Check the 'Ralph: Task $TASK_COUNT' tab for what happened." \
+      "Fix it, then start Ralph again to resume."
+    logf "Error: Task #$TASK_COUNT failed after $TASK_COUNT iterations"
     # Do not leave a stale sprint-complete marker for the next run
     rm -f "$MARKER_DIR/sprint-complete" "$MARKER_DIR/task-done" "$MARKER_DIR/task-failed"
     rm -rf "$MARKER_DIR"
     break
   fi
 
-  log "Task #$TASK_COUNT complete, context reset"
+  logf "Task #$TASK_COUNT complete, context reset"
 
-  echo ""
-  echo -e "${GREEN}✓ Task #$TASK_COUNT complete${NC}"
-  echo "Pausing 3 seconds before next task..."
+  render_overview idle "$(printf '\033[38;5;42m  Run %s complete.\033[0m \033[38;5;244mNext task starting...\033[0m' \
+    "$TASK_COUNT")"
   sleep 3
 done
 
@@ -639,11 +709,7 @@ DURATION=$((END_TIME - START_TIME))
 MINUTES=$((DURATION / 60))
 SECONDS=$((DURATION % 60))
 
-echo ""
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Summary${NC}"
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo "  Tasks attempted: $TASK_COUNT"
-echo "  Total time: ${MINUTES}m ${SECONDS}s"
-echo "  Log file: $LOG_FILE"
-echo ""
+ui_banner info "Session summary" \
+  "Runs attempted: $TASK_COUNT" \
+  "Total time:     ${MINUTES}m ${SECONDS}s" \
+  "Log:            $LOG_FILE"
