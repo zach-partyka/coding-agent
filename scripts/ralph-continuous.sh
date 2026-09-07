@@ -370,34 +370,28 @@ fi
 
 # ── Update check ────────────────────────────────────────────────────────────
 check_for_updates() {
-  command -v gum &>/dev/null || return  # skip silently if gum not installed
+  command -v git >/dev/null 2>&1 || return
   local kit_dir
   kit_dir="$(cd "$(dirname "$0")/.." && pwd)"
+  git -C "$kit_dir" rev-parse --git-dir >/dev/null 2>&1 || return
   git -C "$kit_dir" fetch origin --quiet 2>/dev/null || return
   local behind
   behind=$(git -C "$kit_dir" rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
-  [ "$behind" -eq 0 ] && return
+  [ "${behind:-0}" -eq 0 ] 2>/dev/null && return
 
-  echo ""
-  gum style \
-    --border double \
-    --border-foreground 212 \
-    --foreground 212 \
-    --padding "1 3" \
-    "⚡ Ralph update available — $behind new change$([ "$behind" -gt 1 ] && echo 's')"
-  echo ""
+  ui_banner info "Ralph update available" \
+    "$behind new change$([ "$behind" -gt 1 ] && echo s) on origin/main"
 
-  if gum confirm "View what's new?"; then
-    gum pager < "$kit_dir/CHANGELOG.md"
-    echo ""
+  if ui_confirm "View what's new?"; then
+    ui_pager "$kit_dir/CHANGELOG.md"
   fi
 
-  if gum confirm "Update Ralph now? (recommended before sprinting)"; then
-    gum spin --spinner dot --title "Pulling updates..." -- \
-      git -C "$kit_dir" pull --quiet
-    echo ""
-    gum style --foreground 82 "✓ Ralph updated. Starting sprint..."
-    echo ""
+  if ui_confirm "Update Ralph now? (recommended before sprinting)"; then
+    if ( cd "$kit_dir" && git pull --quiet ); then
+      ui_banner ok "Ralph updated" "Starting sprint..."
+    else
+      ui_banner err "Update failed" "Run 'git -C \"$kit_dir\" pull' manually."
+    fi
   fi
 }
 
