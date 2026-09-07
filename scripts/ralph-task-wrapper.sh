@@ -58,12 +58,9 @@ printf '\033[2J\033[3J\033[H'
 
 # Display clean banner
 PROJECT_NAME=$(basename "$PROJECT_DIR")
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Ralph Task #${TASK_NUM}${NC}"
-echo -e "${BLUE}  Project: ${PROJECT_NAME}${NC}"
-echo -e "${BLUE}  Started: $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')${NC}"
-echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo ""
+ui_banner info "Ralph  ·  Task #${TASK_NUM}" \
+  "Project: ${PROJECT_NAME}" \
+  "Started: $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
 
 # Change to project directory
 cd "$PROJECT_DIR" || {
@@ -71,13 +68,8 @@ cd "$PROJECT_DIR" || {
   exit 1
 }
 
-# Model label for display
-case "${RALPH_MODEL:-default}" in
-  opus|opus-1m)  RALPH_MODEL_LABEL="Opus 4.6" ;;
-  sonnet-1m)     RALPH_MODEL_LABEL="Sonnet 4.6 (1M)" ;;
-  haiku)         RALPH_MODEL_LABEL="Haiku 4.5" ;;
-  *)             RALPH_MODEL_LABEL="Sonnet 4.6" ;;
-esac
+# Model label for display — from ralph_models() in ralph-portable.sh
+RALPH_MODEL_LABEL="$(ralph_model_sprint_label "${RALPH_MODEL:-sonnet}")"
 readonly RALPH_MODEL_LABEL
 
 # Generate a session ID to match against statusline stats file
@@ -480,15 +472,10 @@ if [ "$CLAUDE_EXIT" -ne 0 ]; then
   touch "$TASK_FAILED_MARKER"
   echo "task-failed marker created at $(date '+%Y-%m-%d %H:%M:%S')" >&3
   TASK_END_TS=$(date +%s)
-  echo ""
-  echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
-  echo -e "${RED}  Task Failed (exit ${CLAUDE_EXIT})${NC}"
-  echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
-  echo -e "  Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
-  echo -e "  Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
-  echo -e "  Model:    ${RALPH_MODEL_LABEL}"
-  echo -e "${RED}═══════════════════════════════════════════════════════════${NC}"
-  echo ""
+  ui_banner err "Task Failed (exit ${CLAUDE_EXIT})" \
+    "Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')" \
+    "Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')" \
+    "Model:    ${RALPH_MODEL_LABEL}"
   echo "Wrapper failed at $(date '+%Y-%m-%d %H:%M:%S')" >&3
   exec 3>&-
   exit "$CLAUDE_EXIT"
@@ -522,21 +509,17 @@ if [ -f "$SUMMARY_FILE" ]; then
   # TASK_DURATION sourced from file overrides the wall-clock value above
 fi
 
-echo ""
-echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  Task Complete${NC}"
-echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "  Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')"
-echo -e "  Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')"
-echo -e "  Duration: ${TASK_DURATION} min"
-echo -e "  Model:    ${RALPH_MODEL_LABEL}"
 if [ "$DISPLAY_COST_SOURCE" = "statusline" ]; then
-  echo -e "  Cost:     \$${DISPLAY_COST} (Claude Code)"
+  COST_LINE="Cost:     \$${DISPLAY_COST} (Claude Code)"
 else
-  echo -e "  Cost:     ${DISPLAY_COST} (stats unavailable)"
+  COST_LINE="Cost:     ${DISPLAY_COST} (stats unavailable)"
 fi
-echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
-echo ""
+ui_banner ok "Task Complete" \
+  "Started:  $(date_fmt "$TASK_START_TS" '+%Y-%m-%d %H:%M:%S')" \
+  "Ended:    $(date_fmt "$TASK_END_TS" '+%Y-%m-%d %H:%M:%S')" \
+  "Duration: ${TASK_DURATION} min" \
+  "Model:    ${RALPH_MODEL_LABEL}" \
+  "${COST_LINE}"
 echo -e "${BLUE}Close tab when ready${NC}"
 echo ""
 
