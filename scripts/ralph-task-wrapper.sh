@@ -55,6 +55,7 @@ echo "════════════════════════�
 
 # Clear screen AND scrollback buffer immediately (hides command echo)
 printf '\033[2J\033[3J\033[H'
+ui_title "Ralph: Task ${TASK_NUM}"
 
 # Display clean banner
 PROJECT_NAME=$(basename "$PROJECT_DIR")

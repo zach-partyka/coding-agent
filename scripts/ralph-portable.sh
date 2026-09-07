@@ -130,49 +130,87 @@ count_matches() {
 # gum-styled menus/banners when `gum` is on PATH and stdout is a TTY; a plain
 # numbered-prompt / ASCII-box fallback otherwise. Set RALPH_UI=plain to force
 # the fallback (useful for logs / CI / screenshots without gum).
+# Resolve the gum binary: PATH first, then the winget install location
+# (AppData\Local\Microsoft\WinGet\Packages\... is not always on Git Bash's PATH).
+_UI_GUM_BIN=""
+_ui_gum() {
+  [ -n "$_UI_GUM_BIN" ] && { printf '%s\n' "$_UI_GUM_BIN"; return 0; }
+  local c
+  if c="$(command -v gum 2>/dev/null)"; then _UI_GUM_BIN="$c"; printf '%s\n' "$c"; return 0; fi
+  for c in "$HOME"/AppData/Local/Microsoft/WinGet/Packages/charmbracelet.gum_*/*/gum.exe \
+           "$HOME"/scoop/apps/gum/current/gum.exe \
+           /c/ProgramData/chocolatey/bin/gum.exe; do
+    [ -x "$c" ] && { _UI_GUM_BIN="$c"; printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+
+# One palette for everything Ralph draws. Override RALPH_UI_ACCENT to re-theme.
+RALPH_UI_ACCENT="${RALPH_UI_ACCENT:-39}"   # cyan-blue  — info / prompts / borders
+_RALPH_UI_OK=42                            # green      — success
+_RALPH_UI_WARN=214                         # amber      — attention
+_RALPH_UI_ERR=203                          # red        — failure
+
+# 256-colour code for a semantic name.
+_ui_code() {
+  case "$1" in
+    ok) printf '%s' "$_RALPH_UI_OK" ;;
+    warn) printf '%s' "$_RALPH_UI_WARN" ;;
+    err) printf '%s' "$_RALPH_UI_ERR" ;;
+    *) printf '%s' "$RALPH_UI_ACCENT" ;;
+  esac
+}
+
+# gum usable for DECORATIVE output on stdout (needs stdout to be a TTY).
 _ui_have_gum() {
-  [ "${RALPH_UI:-}" != "plain" ] && command -v gum >/dev/null 2>&1 && [ -t 1 ]
+  [ "${RALPH_UI:-}" != "plain" ] && _ui_gum >/dev/null 2>&1 && [ -t 1 ]
+}
+# gum usable for an INTERACTIVE prompt — gum drives /dev/tty itself, so stdout
+# being a pipe (the common `x="$(ui_choose ...)"` case) is fine.
+_ui_have_gum_tty() {
+  [ "${RALPH_UI:-}" != "plain" ] && _ui_gum >/dev/null 2>&1 && { true >/dev/tty; } 2>/dev/null
+}
+
+# ui_title TEXT — set the terminal tab/window title (OSC 0). No-op off a TTY.
+ui_title() {
+  [ -t 1 ] || return 0
+  printf '\033]0;%s\007' "$1"
 }
 
 # ui_banner COLOR TITLE [LINE...] — boxed banner. COLOR is info|ok|warn|err.
 ui_banner() {
   local color="$1"; shift
   local title="$1"; shift
-  local gc ac
-  case "$color" in
-    ok)   gc=42;  ac='1;32' ;;
-    warn) gc=214; ac='1;33' ;;
-    err)  gc=203; ac='1;31' ;;
-    *)    gc=39;  ac='1;34' ;;
-  esac
+  local code; code="$(_ui_code "$color")"
   if _ui_have_gum; then
-    gum style --border rounded --border-foreground "$gc" --foreground "$gc" \
+    "$(_ui_gum)" style --border rounded --border-foreground "$code" --foreground "$code" \
       --padding "0 2" --margin "1 0" "$title" "$@"
     return
   fi
   local w=59 fill l
   fill=$(printf '%*s' "$w" '' | tr ' ' '=')
-  printf '\n\033[%sm╔%s╗\033[0m\n' "$ac" "$fill"
-  printf '\033[%sm║ %-*s ║\033[0m\n' "$ac" "$((w - 2))" "$title"
-  for l in "$@"; do printf '\033[%sm║ %-*s ║\033[0m\n' "$ac" "$((w - 2))" "$l"; done
-  printf '\033[%sm╚%s╝\033[0m\n\n' "$ac" "$fill"
+  printf '\n\033[1;38;5;%sm╔%s╗\033[0m\n' "$code" "$fill"
+  printf '\033[1;38;5;%sm║ %-*s ║\033[0m\n' "$code" "$((w - 2))" "$title"
+  for l in "$@"; do printf '\033[38;5;%sm║ %-*s ║\033[0m\n' "$code" "$((w - 2))" "$l"; done
+  printf '\033[1;38;5;%sm╚%s╝\033[0m\n\n' "$code" "$fill"
 }
 
-# ui_choose PROMPT OPT... — print the chosen OPT to stdout. Returns 1 on abort
-# (Esc / Ctrl-C / EOF / invalid).
+# ui_choose PROMPT OPT... — print the chosen OPT to stdout. Returns 1 on abort.
 ui_choose() {
   local prompt="$1"; shift
-  # gum reads the terminal via /dev/tty, so it works even when stdin isn't a
-  # TTY (e.g. the script was launched with stdin closed/redirected).
-  if _ui_have_gum; then
-    gum choose --header "$prompt" "$@" || return 1
+  if _ui_have_gum_tty; then
+    "$(_ui_gum)" choose --header "$prompt" \
+      --header.foreground="$RALPH_UI_ACCENT" \
+      --cursor.foreground="$RALPH_UI_ACCENT" \
+      --selected.foreground="$RALPH_UI_ACCENT" "$@" || return 1
     return 0
   fi
-  # Prompt + list to stderr so a $(...) caller still shows them; read from stdin
-  # (the caller's command substitution inherits it).
-  printf '\n\033[1;34m%s\033[0m\n' "$prompt" >&2
+  printf '\n\033[1;38;5;%sm%s\033[0m\n' "$RALPH_UI_ACCENT" "$prompt" >&2
   local i=1 opt
-  for opt in "$@"; do printf '  \033[0;32m%d\033[0m) %s\n' "$i" "$opt" >&2; i=$((i + 1)); done
+  for opt in "$@"; do
+    printf '  \033[38;5;%sm%d\033[0m) %s\n' "$RALPH_UI_ACCENT" "$i" "$opt" >&2
+    i=$((i + 1))
+  done
   local sel
   read -r -p "Select [1-$#]: " sel || return 1
   case "$sel" in ''|*[!0-9]*) return 1 ;; esac
@@ -183,13 +221,47 @@ ui_choose() {
 # ui_input PROMPT [PLACEHOLDER] — read one line of text from the user.
 ui_input() {
   local prompt="$1" ph="${2:-}"
-  if _ui_have_gum; then
-    gum input --header "$prompt" --placeholder "$ph"
+  if _ui_have_gum_tty; then
+    "$(_ui_gum)" input --header "$prompt" --placeholder "$ph" \
+      --header.foreground="$RALPH_UI_ACCENT" --cursor.foreground="$RALPH_UI_ACCENT"
     return
   fi
   local val
   read -r -p "$prompt " val || return 1
   printf '%s\n' "$val"
+}
+
+# ui_confirm PROMPT — 0 = yes, 1 = no.
+ui_confirm() {
+  local prompt="$1"
+  if _ui_have_gum_tty; then
+    "$(_ui_gum)" confirm "$prompt" \
+      --selected.background="$RALPH_UI_ACCENT" \
+      --prompt.foreground="$RALPH_UI_ACCENT"
+    return $?
+  fi
+  local a
+  read -r -p "$prompt [y/N] " a || return 1
+  case "$a" in [Yy]|[Yy][Ee][Ss]) return 0 ;; *) return 1 ;; esac
+}
+
+# ui_pager FILE — scroll through a file. Markdown gets rendered with `gum format`
+# (its own pager mangles wide content, so pipe to less). q returns to the caller.
+ui_pager() {
+  local f="$1" g
+  [ -f "$f" ] || return 0
+  local -a pg
+  if command -v less >/dev/null 2>&1; then
+    pg=(less -R --quit-if-one-screen
+        -P ' ↑ ↓ scroll   ·   q to go back ')
+  else
+    pg=(cat)
+  fi
+  if [ "${RALPH_UI:-}" != "plain" ] && g="$(_ui_gum 2>/dev/null)"; then
+    "$g" format --theme dark < "$f" | "${pg[@]}"
+  else
+    "${pg[@]}" < "$f"
+  fi
 }
 
 # ─── Model choices ───────────────────────────────────────────────────────

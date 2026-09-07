@@ -27,6 +27,9 @@ fi
 RALPH_WT_PROFILE="${RALPH_WT_PROFILE:-Git Bash}"  # Windows Terminal profile name (customizable)
 RALPH_MODEL=""  # Model selection (set via prompt or RALPH_MODEL env var)
 
+# Keep the original argv so check_for_updates can re-exec cleanly after a pull.
+RALPH_ARGV=("$@")
+
 # Parse args in one pass: --inline flag and project directory
 FORCE_INLINE=false
 PROJECT_ARG=""
@@ -300,6 +303,7 @@ LAUNCHER
   # to inline mode instead of blocking on wait_for_completion for the full
   # task timeout.
   MSYS_NO_PATHCONV=1 wt.exe new-tab -w 0 --profile "$RALPH_WT_PROFILE" \
+    --title "Ralph: Task ${task_num}" \
     "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
 
   if wait_for_marker "$spawned_marker" 15; then
@@ -336,6 +340,7 @@ wait_for_completion() {
 }
 
 # Header
+ui_title "Ralph: Overview"
 ui_banner info "Ralph Continuous" "Watch Claude work - diffs, reasoning, one tab per task"
 
 TERMINAL_TYPE=$(detect_terminal)
@@ -368,35 +373,54 @@ fi
 
 # ── Update check ────────────────────────────────────────────────────────────
 check_for_updates() {
-  command -v gum &>/dev/null || return  # skip silently if gum not installed
+  command -v git >/dev/null 2>&1 || return
   local kit_dir
   kit_dir="$(cd "$(dirname "$0")/.." && pwd)"
-  git -C "$kit_dir" fetch origin --quiet 2>/dev/null || return
+  git -C "$kit_dir" rev-parse --git-dir >/dev/null 2>&1 || return
+
+  # Compare against THIS checkout's own upstream, not a hard-coded origin/main.
+  # Hard-coding it loops forever whenever the kit is on any other branch (or
+  # main has moved past what this checkout has): the prompt keeps firing, but a
+  # pull on the current branch never closes the gap.
+  local upstream
+  upstream="$(git -C "$kit_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || return
+
+  git -C "$kit_dir" fetch --quiet 2>/dev/null || return
   local behind
-  behind=$(git -C "$kit_dir" rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
-  [ "$behind" -eq 0 ] && return
+  behind=$(git -C "$kit_dir" rev-list "HEAD..$upstream" --count 2>/dev/null || echo 0)
+  [ "${behind:-0}" -eq 0 ] 2>/dev/null && return
 
-  echo ""
-  gum style \
-    --border double \
-    --border-foreground 212 \
-    --foreground 212 \
-    --padding "1 3" \
-    "⚡ Ralph update available — $behind new change$([ "$behind" -gt 1 ] && echo 's')"
-  echo ""
+  ui_banner info "Ralph update available" \
+    "$behind update$([ "$behind" -gt 1 ] && echo s) on $upstream"
 
-  if gum confirm "View what's new?"; then
-    gum pager < "$kit_dir/CHANGELOG.md"
-    echo ""
+  local UPD="Update now" VIEW="View what changed" SKIP="Skip for now" pick
+  while :; do
+    pick="$(ui_choose "Update Ralph?" "$UPD" "$VIEW" "$SKIP")" || pick="$SKIP"
+    case "$pick" in
+      "$VIEW") ui_pager "$kit_dir/CHANGELOG.md" ;;   # q returns here
+      "$SKIP")
+        echo "Skipped. Update later with:  git -C \"$kit_dir\" pull"
+        return
+        ;;
+      *) break ;;                                     # "Update now"
+    esac
+  done
+
+  local before after
+  before="$(git -C "$kit_dir" rev-parse HEAD 2>/dev/null)"
+  if ! ( cd "$kit_dir" && git merge --ff-only --quiet "$upstream" ); then
+    ui_banner err "Couldn't fast-forward" \
+      "The kit has local commits. Update by hand:  git -C \"$kit_dir\" pull --rebase"
+    return
   fi
+  after="$(git -C "$kit_dir" rev-parse HEAD 2>/dev/null)"
+  [ "$before" = "$after" ] && return   # no-op pull — don't re-exec, don't loop
 
-  if gum confirm "Update Ralph now? (recommended before sprinting)"; then
-    gum spin --spinner dot --title "Pulling updates..." -- \
-      git -C "$kit_dir" pull --quiet
-    echo ""
-    gum style --foreground 82 "✓ Ralph updated. Starting sprint..."
-    echo ""
-  fi
+  # The merge just rewrote this running script; bash reads a script by byte
+  # offset, so continuing would run garbage. Re-exec the fresh copy — the re-run
+  # sees behind=0 and skips this block.
+  ui_banner ok "Ralph updated" "Restarting on the new version..."
+  exec bash "$0" ${RALPH_ARGV[@]+"${RALPH_ARGV[@]}"}
 }
 
 check_for_updates
