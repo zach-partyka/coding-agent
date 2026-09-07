@@ -281,29 +281,27 @@ MODELS
 # Menu labels (field 2), newline-separated — feed straight to ui_choose.
 ralph_model_menu_labels() { ralph_models | cut -d'|' -f2; }
 
-# alias whose menu label == $1 (empty if none — caller should default).
-ralph_model_alias_for() {
-  local a l s c
-  ralph_models | while IFS='|' read -r a l s c; do
-    [ "$l" = "$1" ] && printf '%s\n' "$a"
-  done
+# _ralph_model_field KEY KEYFIELD OUTFIELD [DEFAULT] — look KEY up in ralph_models
+# by field KEYFIELD (1=alias 2=menu-label 3=sprint-label 4=$/min) and print field
+# OUTFIELD. Prints DEFAULT (or nothing) on no match. Always returns 0 — a caller
+# uses it as x="$(...)" under `set -euo pipefail`, so it must never exit non-zero.
+_ralph_model_field() {
+  local key="$1" kf="$2" of="$3" def="${4:-}" a l s c
+  local -a f
+  while IFS='|' read -r a l s c; do
+    [ -n "$a" ] || continue
+    f=("" "$a" "$l" "$s" "$c")
+    if [ "${f[$kf]}" = "$key" ]; then printf '%s\n' "${f[$of]}"; return 0; fi
+  done <<MODELS_LOOKUP
+$(ralph_models)
+MODELS_LOOKUP
+  [ -n "$def" ] && printf '%s\n' "$def"
+  return 0
 }
 
-# sprint_plan.md label for alias $1 (default: Sonnet).
-ralph_model_sprint_label() {
-  local a l s c
-  { ralph_models | while IFS='|' read -r a l s c; do
-      [ "$a" = "$1" ] && printf '%s\n' "$s"
-    done; } | grep . || printf 'Sonnet\n'
-}
-
-# rough $/min for alias $1 (default: 0.03).
-ralph_model_cost_per_min() {
-  local a l s c
-  { ralph_models | while IFS='|' read -r a l s c; do
-      [ "$a" = "$1" ] && printf '%s\n' "$c"
-    done; } | grep . || printf '0.03\n'
-}
+ralph_model_alias_for()    { _ralph_model_field "$1"          2 1;         }
+ralph_model_sprint_label() { _ralph_model_field "${1:-}"      1 3 Sonnet;  }
+ralph_model_cost_per_min() { _ralph_model_field "${1:-}"      1 4 0.03;    }
 
 # ─── Cost formatting ───────────────────────────────────────────────────────
 # Print a 2-decimal amount. Return the literal "-.--" for empty / null /

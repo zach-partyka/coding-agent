@@ -465,11 +465,28 @@ export RALPH_MODEL
 echo -e "Model: ${GREEN}$(ralph_model_sprint_label "$RALPH_MODEL")${NC}  (${RALPH_MODEL})"
 echo ""
 
-# Validate project structure
-if [ ! -f "$FIX_PLAN" ]; then
-  echo -e "${RED}Error: sprint_plan.md not found at $FIX_PLAN${NC}"
-  echo "Run /ralph-plan first to generate a plan."
-  exit 1
+# Validate project structure. A missing sprint_plan.md — or one that's still the
+# unfilled template — means there's nothing to build yet; offer to plan.
+plan_ready() {
+  [ -f "$FIX_PLAN" ] || return 1
+  ! grep -qE '\[Task name\]|\[Theme/Goal\]|\[One sentence describing' "$FIX_PLAN"
+}
+if ! plan_ready; then
+  if [ -f "$FIX_PLAN" ]; then
+    ui_banner warn "No sprint plan yet" "sprint_plan.md is still the empty template."
+  else
+    ui_banner warn "No sprint plan yet" "sprint_plan.md doesn't exist in this project."
+  fi
+  if ui_confirm "Create one now with /ralph-plan?"; then
+    claude --dangerously-skip-permissions --model "$RALPH_MODEL" "/ralph-plan
+
+Project directory: $PROJECT_DIR"
+    echo ""
+    echo "Plan done. Re-run this to start the sprint:  $0"
+  else
+    echo "Run  claude \"/ralph-plan\"  first, then start again."
+  fi
+  exit 0
 fi
 
 if [ ! -d "$PROJECT_DIR/specs" ]; then
