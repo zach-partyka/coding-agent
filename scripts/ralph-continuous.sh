@@ -300,6 +300,7 @@ LAUNCHER
   # to inline mode instead of blocking on wait_for_completion for the full
   # task timeout.
   MSYS_NO_PATHCONV=1 wt.exe new-tab -w 0 --profile "$RALPH_WT_PROFILE" \
+    --title "Ralph: Task ${task_num}" \
     "$bash_exe" -l "$launcher" 2>>"$LOG_FILE" || true
 
   if wait_for_marker "$spawned_marker" 15; then
@@ -336,6 +337,7 @@ wait_for_completion() {
 }
 
 # Header
+ui_title "Ralph: Summary"
 ui_banner info "Ralph Continuous" "Watch Claude work - diffs, reasoning, one tab per task"
 
 TERMINAL_TYPE=$(detect_terminal)

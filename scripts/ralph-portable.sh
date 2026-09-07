@@ -149,6 +149,12 @@ _ui_have_gum() {
   [ "${RALPH_UI:-}" != "plain" ] && _ui_gum >/dev/null 2>&1 && [ -t 1 ]
 }
 
+# ui_title TEXT — set the terminal tab/window title (OSC 0). No-op off a TTY.
+ui_title() {
+  [ -t 1 ] || return 0
+  printf '\033]0;%s\007' "$1"
+}
+
 # ui_banner COLOR TITLE [LINE...] — boxed banner. COLOR is info|ok|warn|err.
 ui_banner() {
   local color="$1"; shift
