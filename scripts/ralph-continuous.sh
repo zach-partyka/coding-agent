@@ -340,7 +340,7 @@ wait_for_completion() {
 }
 
 # Header
-ui_title "Ralph: Summary"
+ui_title "Ralph: Overview"
 ui_banner info "Ralph Continuous" "Watch Claude work - diffs, reasoning, one tab per task"
 
 TERMINAL_TYPE=$(detect_terminal)
