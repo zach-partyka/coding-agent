@@ -138,14 +138,12 @@ else
   # Build mode (one thing) - use /ralph skill
   echo "Starting build mode (one task)..."
   
-  # Optional model selection - deterministic version string for sprint_plan.md (match ralph-task-wrapper.sh)
-  case "${RALPH_MODEL:-default}" in
-    opus)       RALPH_MODEL_LABEL="Opus 4.6" ;;
-    opus-1m)    RALPH_MODEL_LABEL="Opus 4.6 (1M)" ;;
-    sonnet-1m)  RALPH_MODEL_LABEL="Sonnet 4.6 (1M)" ;;
-    haiku)      RALPH_MODEL_LABEL="Haiku 4.5" ;;
-    *)          RALPH_MODEL_LABEL="Sonnet 4.6 (default)" ;;
-  esac
+  # Model label for sprint_plan.md — from ralph_models() in ralph-portable.sh
+  if command -v ralph_model_sprint_label >/dev/null 2>&1; then
+    RALPH_MODEL_LABEL="$(ralph_model_sprint_label "${RALPH_MODEL:-sonnet}")"
+  else
+    RALPH_MODEL_LABEL="Sonnet"
+  fi
   if [ -n "${RALPH_MODEL:-}" ]; then
     echo "Model: $RALPH_MODEL_LABEL"
     echo ""
@@ -170,18 +168,12 @@ Ralph model: ${RALPH_MODEL_LABEL}"
     TASK_DURATION=1
   fi
   
-  # Calculate cost estimate based on model and duration
-  # Same pricing as ralph-task-wrapper.sh for consistency:
-  # - Opus 4.6: ~$0.05/min
-  # - Sonnet 4.6: ~$0.03/min
-  # - Haiku 4.5: ~$0.01/min
-  case "${RALPH_MODEL:-default}" in
-    opus)       COST_PER_MIN="0.05" ;;
-    opus-1m)    COST_PER_MIN="0.08" ;;
-    sonnet-1m)  COST_PER_MIN="0.05" ;;
-    haiku)      COST_PER_MIN="0.01" ;;
-    *)          COST_PER_MIN="0.03" ;;
-  esac
+  # Rough cost estimate — $/min from ralph_models() in ralph-portable.sh
+  if command -v ralph_model_cost_per_min >/dev/null 2>&1; then
+    COST_PER_MIN="$(ralph_model_cost_per_min "${RALPH_MODEL:-sonnet}")"
+  else
+    COST_PER_MIN="0.03"
+  fi
   
   # Calculate cost (using bc for floating point, fallback to awk)
   if command -v bc &> /dev/null; then

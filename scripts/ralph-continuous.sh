@@ -47,45 +47,30 @@ readonly NC='\033[0m' # No Color
 
 # Prompt for directory if not provided
 if [ -z "$PROJECT_ARG" ]; then
-  echo ""
-  echo -e "${BLUE}Which project directory should I work in?${NC}"
-  echo ""
-
   # Find directories with sprint_plan.md (Ralph-compatible projects)
   # Exclude /sprints/ subdirectories (those are archives)
   RALPH_PROJECTS=()
   while IFS= read -r sprint_file; do
-    project_dir=$(dirname "$sprint_file")
-    RALPH_PROJECTS+=("$project_dir")
+    RALPH_PROJECTS+=("$(dirname "$sprint_file")")
   done < <({ find "$HOME/Documents" -name "sprint_plan.md" -type f 2>/dev/null
              [ -d "$HOME/OneDrive/Documents" ] && find "$HOME/OneDrive/Documents" -name "sprint_plan.md" -type f 2>/dev/null
            } | grep -v "/sprints/" | sort -u | head -n 10)
 
+  RALPH_OTHER_OPT="Enter a different path..."
   if [ ${#RALPH_PROJECTS[@]} -gt 0 ]; then
-    echo "Found Ralph projects:"
-    echo ""
-    for i in "${!RALPH_PROJECTS[@]}"; do
-      echo -e "  ${GREEN}$((i+1))${NC}) ${RALPH_PROJECTS[$i]}"
-    done
-    echo ""
-    echo -e "  ${YELLOW}0${NC}) Enter a different path"
-    echo ""
-    read -p "Select [1-${#RALPH_PROJECTS[@]}] or 0: " selection
-
-    if [ "$selection" = "0" ]; then
-      read -p "Enter path: " PROJECT_DIR
-      PROJECT_DIR="${PROJECT_DIR/#\~/$HOME}"
-    elif [ "$selection" -ge 1 ] 2>/dev/null && [ "$selection" -le ${#RALPH_PROJECTS[@]} ]; then
-      PROJECT_DIR="${RALPH_PROJECTS[$((selection-1))]}"
-    else
-      echo -e "${RED}Invalid selection. Exiting.${NC}"
-      exit 1
-    fi
+    PROJECT_CHOICE="$(ui_choose "Which project directory should I work in?" \
+      "${RALPH_PROJECTS[@]}" "$RALPH_OTHER_OPT")" || { echo "No selection. Exiting."; exit 1; }
   else
-    echo "No Ralph projects found. Enter path manually:"
-    read -p "> " PROJECT_DIR
-    PROJECT_DIR="${PROJECT_DIR/#\~/$HOME}"
+    PROJECT_CHOICE="$RALPH_OTHER_OPT"
   fi
+
+  if [ "$PROJECT_CHOICE" = "$RALPH_OTHER_OPT" ]; then
+    PROJECT_DIR="$(ui_input "Project directory path:" "~/Documents/my-project")" \
+      || { echo "No path provided. Exiting."; exit 1; }
+  else
+    PROJECT_DIR="$PROJECT_CHOICE"
+  fi
+  PROJECT_DIR="${PROJECT_DIR/#\~/$HOME}"
 
   if [ -z "$PROJECT_DIR" ]; then
     echo -e "${RED}No directory provided. Exiting.${NC}"
@@ -106,6 +91,12 @@ log() {
   local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
   echo -e "$msg"
   echo "$msg" >> "$LOG_FILE"
+}
+
+# Same as log(), but file only — for startup detail that would clutter the
+# screen before the first menu.
+logf() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 check_tasks_remain() {
@@ -345,17 +336,12 @@ wait_for_completion() {
 }
 
 # Header
-echo ""
-echo -e "${BLUE}╔═══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║  Ralph Continuous - Full Interactive Visibility          ║${NC}"
-echo -e "${BLUE}║  Watch Claude work with diffs and reasoning              ║${NC}"
-echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
-echo ""
+ui_banner info "Ralph Continuous" "Watch Claude work - diffs, reasoning, one tab per task"
 
 TERMINAL_TYPE=$(detect_terminal)
-log "Starting Ralph Continuous (terminal type: ${TERMINAL_TYPE})"
-log "Project: ${PROJECT_DIR}"
-log "Fix Plan: ${FIX_PLAN}"
+logf "Starting Ralph Continuous (terminal type: ${TERMINAL_TYPE})"
+logf "Project: ${PROJECT_DIR}"
+logf "Fix Plan: ${FIX_PLAN}"
 
 # Load project configuration from ralph-config.md only
 load_ralph_config() {
@@ -377,8 +363,7 @@ if load_ralph_config; then
   export RALPH_DEPLOY_WAIT_SECONDS RALPH_VALIDATE_LOCAL RALPH_VALIDATE_DEPLOY
   export RALPH_HEALTH_CHECK_PATH RALPH_TASK_TIMEOUT_MINUTES RALPH_AUTO_ARCHIVE
   export RALPH_TEST_ENV_VARS
-  echo -e "${GREEN}✓ Configuration loaded${NC}"
-  log "Configuration loaded"
+  logf "Configuration loaded"
 fi
 
 # ── Update check ────────────────────────────────────────────────────────────
@@ -437,50 +422,23 @@ elif [ "$TERMINAL_TYPE" = "vscode" ]; then
   fi
 fi
 
-echo -e "Terminal: ${GREEN}$TERMINAL_TYPE${NC}"
-echo ""
+logf "Terminal: $TERMINAL_TYPE"
 
-# Model selection
+# Model selection — labels come from ralph_models() (ralph-portable.sh),
+# the single place model choices are defined.
 if [ -z "$RALPH_MODEL" ]; then
-  echo -e "${BLUE}Which model should Ralph use?${NC}"
-  echo ""
-  echo -e "  ${GREEN}1${NC}) Default (Sonnet 4.6) - \$3/\$15 per Mtok - good for most tasks"
-  echo -e "  ${GREEN}2${NC}) opus - Opus 4.6 - \$5/\$25 per Mtok - most capable"
-  echo -e "  ${GREEN}3${NC}) opus-1m - Opus 4.6 (1M context) - \$10/\$37.50 per Mtok"
-  echo -e "  ${GREEN}4${NC}) sonnet-1m - Sonnet 4.6 (1M context) - \$6/\$22.50 per Mtok"
-  echo -e "  ${GREEN}5${NC}) haiku - Haiku 4.5 - \$1/\$5 per Mtok - fastest"
-  echo ""
-  read -p "Select [1-5]: " model_selection
-  
-  case $model_selection in
-    1|"")
-      RALPH_MODEL="sonnet"
-      ;;
-    2)
-      RALPH_MODEL="opus"
-      ;;
-    3)
-      RALPH_MODEL="opus-1m"
-      ;;
-    4)
-      RALPH_MODEL="sonnet-1m"
-      ;;
-    5)
-      RALPH_MODEL="haiku"
-      ;;
-    *)
-      echo -e "${YELLOW}Invalid selection, using default model${NC}"
-      RALPH_MODEL=""
-      ;;
-  esac
+  MODEL_LABELS=()
+  while IFS= read -r _label; do MODEL_LABELS+=("$_label"); done < <(ralph_model_menu_labels)
+
+  MODEL_CHOICE="$(ui_choose "Which model should Ralph use?" "${MODEL_LABELS[@]}")" \
+    || MODEL_CHOICE="${MODEL_LABELS[0]}"
+
+  RALPH_MODEL="$(ralph_model_alias_for "$MODEL_CHOICE")"
+  [ -n "$RALPH_MODEL" ] || RALPH_MODEL="sonnet"
 fi
 
-if [ -n "$RALPH_MODEL" ]; then
-  echo -e "Model: ${GREEN}$RALPH_MODEL${NC}"
-  export RALPH_MODEL
-else
-  echo -e "Model: ${GREEN}default${NC}"
-fi
+export RALPH_MODEL
+echo -e "Model: ${GREEN}$(ralph_model_sprint_label "$RALPH_MODEL")${NC}  (${RALPH_MODEL})"
 echo ""
 
 # Validate project structure
