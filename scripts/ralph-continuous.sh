@@ -380,18 +380,26 @@ check_for_updates() {
   [ "${behind:-0}" -eq 0 ] 2>/dev/null && return
 
   ui_banner info "Ralph update available" \
-    "$behind new change$([ "$behind" -gt 1 ] && echo s) on origin/main"
+    "$behind update$([ "$behind" -gt 1 ] && echo s) waiting on origin/main"
 
-  if ui_confirm "View what's new?"; then
-    ui_pager "$kit_dir/CHANGELOG.md"
-  fi
+  local UPD="Update now" UPD_LOG="Show what changed, then update" SKIP="Skip for now"
+  local pick
+  pick="$(ui_choose "Update Ralph?" "$UPD" "$UPD_LOG" "$SKIP")" || pick="$SKIP"
 
-  if ui_confirm "Update Ralph now? (recommended before sprinting)"; then
-    if ( cd "$kit_dir" && git pull --quiet ); then
-      ui_banner ok "Ralph updated" "Starting sprint..."
-    else
-      ui_banner err "Update failed" "Run 'git -C \"$kit_dir\" pull' manually."
-    fi
+  case "$pick" in
+    "$SKIP")
+      echo "Skipped. Update later with:  git -C \"$kit_dir\" pull"
+      return
+      ;;
+    "$UPD_LOG")
+      ui_pager "$kit_dir/CHANGELOG.md"
+      ;;
+  esac
+
+  if ( cd "$kit_dir" && git pull --quiet ); then
+    ui_banner ok "Ralph updated" "Now on the latest version."
+  else
+    ui_banner err "Update failed" "Run 'git -C \"$kit_dir\" pull' by hand."
   fi
 }
 
