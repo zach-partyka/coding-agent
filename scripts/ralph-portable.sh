@@ -130,8 +130,23 @@ count_matches() {
 # gum-styled menus/banners when `gum` is on PATH and stdout is a TTY; a plain
 # numbered-prompt / ASCII-box fallback otherwise. Set RALPH_UI=plain to force
 # the fallback (useful for logs / CI / screenshots without gum).
+# Resolve the gum binary: PATH first, then the winget install location
+# (AppData\Local\Microsoft\WinGet\Packages\... is not always on Git Bash's PATH).
+_UI_GUM_BIN=""
+_ui_gum() {
+  [ -n "$_UI_GUM_BIN" ] && { printf '%s\n' "$_UI_GUM_BIN"; return 0; }
+  local c
+  if c="$(command -v gum 2>/dev/null)"; then _UI_GUM_BIN="$c"; printf '%s\n' "$c"; return 0; fi
+  for c in "$HOME"/AppData/Local/Microsoft/WinGet/Packages/charmbracelet.gum_*/*/gum.exe \
+           "$HOME"/scoop/apps/gum/current/gum.exe \
+           /c/ProgramData/chocolatey/bin/gum.exe; do
+    [ -x "$c" ] && { _UI_GUM_BIN="$c"; printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
+
 _ui_have_gum() {
-  [ "${RALPH_UI:-}" != "plain" ] && command -v gum >/dev/null 2>&1 && [ -t 1 ]
+  [ "${RALPH_UI:-}" != "plain" ] && _ui_gum >/dev/null 2>&1 && [ -t 1 ]
 }
 
 # ui_banner COLOR TITLE [LINE...] — boxed banner. COLOR is info|ok|warn|err.
@@ -146,7 +161,7 @@ ui_banner() {
     *)    gc=39;  ac='1;34' ;;
   esac
   if _ui_have_gum; then
-    gum style --border rounded --border-foreground "$gc" --foreground "$gc" \
+    "$(_ui_gum)" style --border rounded --border-foreground "$gc" --foreground "$gc" \
       --padding "0 2" --margin "1 0" "$title" "$@"
     return
   fi
@@ -165,7 +180,7 @@ ui_choose() {
   # gum reads the terminal via /dev/tty, so it works even when stdin isn't a
   # TTY (e.g. the script was launched with stdin closed/redirected).
   if _ui_have_gum; then
-    gum choose --header "$prompt" "$@" || return 1
+    "$(_ui_gum)" choose --header "$prompt" "$@" || return 1
     return 0
   fi
   # Prompt + list to stderr so a $(...) caller still shows them; read from stdin
@@ -184,7 +199,7 @@ ui_choose() {
 ui_input() {
   local prompt="$1" ph="${2:-}"
   if _ui_have_gum; then
-    gum input --header "$prompt" --placeholder "$ph"
+    "$(_ui_gum)" input --header "$prompt" --placeholder "$ph"
     return
   fi
   local val
