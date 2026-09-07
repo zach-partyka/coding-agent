@@ -377,16 +377,23 @@ check_for_updates() {
   local kit_dir
   kit_dir="$(cd "$(dirname "$0")/.." && pwd)"
   git -C "$kit_dir" rev-parse --git-dir >/dev/null 2>&1 || return
-  git -C "$kit_dir" fetch origin --quiet 2>/dev/null || return
+
+  # Compare against THIS checkout's own upstream, not a hard-coded origin/main.
+  # Hard-coding it loops forever whenever the kit is on any other branch (or
+  # main has moved past what this checkout has): the prompt keeps firing, but a
+  # pull on the current branch never closes the gap.
+  local upstream
+  upstream="$(git -C "$kit_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || return
+
+  git -C "$kit_dir" fetch --quiet 2>/dev/null || return
   local behind
-  behind=$(git -C "$kit_dir" rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+  behind=$(git -C "$kit_dir" rev-list "HEAD..$upstream" --count 2>/dev/null || echo 0)
   [ "${behind:-0}" -eq 0 ] 2>/dev/null && return
 
   ui_banner info "Ralph update available" \
-    "$behind update$([ "$behind" -gt 1 ] && echo s) waiting on origin/main"
+    "$behind update$([ "$behind" -gt 1 ] && echo s) on $upstream"
 
-  local UPD="Update now" VIEW="View what changed" SKIP="Skip for now"
-  local pick
+  local UPD="Update now" VIEW="View what changed" SKIP="Skip for now" pick
   while :; do
     pick="$(ui_choose "Update Ralph?" "$UPD" "$VIEW" "$SKIP")" || pick="$SKIP"
     case "$pick" in
@@ -399,15 +406,21 @@ check_for_updates() {
     esac
   done
 
-  if ( cd "$kit_dir" && git pull --quiet ); then
-    # git pull just rewrote this very script (and ralph-portable.sh). bash reads
-    # a script by byte offset, so continuing would run garbage — re-exec the
-    # fresh copy. The re-run sees behind=0 and skips this block.
-    ui_banner ok "Ralph updated" "Restarting on the new version..."
-    exec bash "$0" ${RALPH_ARGV[@]+"${RALPH_ARGV[@]}"}
-  else
-    ui_banner err "Update failed" "Run 'git -C \"$kit_dir\" pull' by hand."
+  local before after
+  before="$(git -C "$kit_dir" rev-parse HEAD 2>/dev/null)"
+  if ! ( cd "$kit_dir" && git merge --ff-only --quiet "$upstream" ); then
+    ui_banner err "Couldn't fast-forward" \
+      "The kit has local commits. Update by hand:  git -C \"$kit_dir\" pull --rebase"
+    return
   fi
+  after="$(git -C "$kit_dir" rev-parse HEAD 2>/dev/null)"
+  [ "$before" = "$after" ] && return   # no-op pull — don't re-exec, don't loop
+
+  # The merge just rewrote this running script; bash reads a script by byte
+  # offset, so continuing would run garbage. Re-exec the fresh copy — the re-run
+  # sees behind=0 and skips this block.
+  ui_banner ok "Ralph updated" "Restarting on the new version..."
+  exec bash "$0" ${RALPH_ARGV[@]+"${RALPH_ARGV[@]}"}
 }
 
 check_for_updates
